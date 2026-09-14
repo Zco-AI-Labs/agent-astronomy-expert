@@ -2,8 +2,13 @@
   "privileges": {
     "1": {
       "name": "Custom Agent Manager",
-      "description": "Allows the full capability of the agent",
-      "tools": []
+      "description": "Allows full capability of the Astronomy Expert agent",
+      "tools": [
+        "get_stargazing_forecast",
+        "get_celestial_body_position",
+        "get_astronomical_events",
+        "manage_stargazer_profile"
+      ]
     }
   }
 }

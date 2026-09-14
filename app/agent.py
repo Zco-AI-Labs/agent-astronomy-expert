@@ -24,6 +24,10 @@ from app.core.system_tools import (
     consultAgent,
     discover_agents,
 )
+from app.scripts.get_stargazing_forecast import get_stargazing_forecast
+from app.scripts.get_celestial_body_position import get_celestial_body_position
+from app.scripts.get_astronomical_events import get_astronomical_events
+from app.scripts.manage_stargazer_profile import manage_stargazer_profile
 
 # 1. Require SKILL.md as the Single Source of Truth for metadata (name, description) and instructions
 runtime_dir = os.path.dirname(os.path.abspath(__file__))

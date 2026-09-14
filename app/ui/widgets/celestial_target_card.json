@@ -1,0 +1,114 @@
+{
+  "type": "container",
+  "props": {
+    "className": "flex flex-col gap-3 p-4 bg-slate-900 border border-violet-500/30 rounded-xl shadow-lg text-slate-100 max-w-sm w-full"
+  },
+  "children": [
+    {
+      "type": "container",
+      "props": {
+        "className": "flex items-center justify-between border-b border-slate-800 pb-2"
+      },
+      "children": [
+        {
+          "type": "text",
+          "props": {
+            "text": "🪐 {{data.target_name}}",
+            "className": "text-base font-bold text-violet-300"
+          }
+        },
+        {
+          "type": "text",
+          "props": {
+            "text": "{{data.visibility_status}}",
+            "className": "text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/30"
+          }
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "props": {
+        "className": "grid grid-cols-2 gap-2"
+      },
+      "children": [
+        {
+          "type": "container",
+          "props": {
+            "className": "p-2.5 bg-slate-800/50 rounded-lg flex flex-col"
+          },
+          "children": [
+            {
+              "type": "text",
+              "props": {
+                "text": "Direction",
+                "className": "text-xs text-slate-400"
+              }
+            },
+            {
+              "type": "text",
+              "props": {
+                "text": "{{data.cardinal_direction}} ({{data.azimuth_degrees}}°)",
+                "className": "text-sm font-semibold text-slate-100"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "props": {
+            "className": "p-2.5 bg-slate-800/50 rounded-lg flex flex-col"
+          },
+          "children": [
+            {
+              "type": "text",
+              "props": {
+                "text": "Altitude Angle",
+                "className": "text-xs text-slate-400"
+              }
+            },
+            {
+              "type": "text",
+              "props": {
+                "text": "{{data.altitude_degrees}}° Above Horizon",
+                "className": "text-sm font-semibold text-slate-100"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "props": {
+        "className": "flex items-center justify-between text-xs text-slate-300 p-2 bg-slate-800/30 rounded-lg"
+      },
+      "children": [
+        {
+          "type": "text",
+          "props": {
+            "text": "Constellation: {{data.constellation}}",
+            "className": "font-medium"
+          }
+        },
+        {
+          "type": "text",
+          "props": {
+            "text": "Optics: {{data.optical_aid_required}}",
+            "className": "font-medium text-amber-300"
+          }
+        }
+      ]
+    },
+    {
+      "type": "button",
+      "props": {
+        "label": "Close",
+        "actionUrl": "client://close_widget",
+        "closeOnClick": true,
+        "submittedLabel": "Dismissed",
+        "className": "w-full py-1.5 text-xs font-semibold rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+      }
+    }
+  ]
+}

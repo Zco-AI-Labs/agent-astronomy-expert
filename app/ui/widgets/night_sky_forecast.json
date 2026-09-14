@@ -1,0 +1,197 @@
+{
+  "type": "container",
+  "props": {
+    "className": "flex flex-col gap-4 p-5 bg-slate-900 border border-indigo-500/30 rounded-2xl shadow-xl text-slate-100 max-w-md w-full"
+  },
+  "children": [
+    {
+      "type": "container",
+      "props": {
+        "className": "flex items-center justify-between border-b border-slate-800 pb-3"
+      },
+      "children": [
+        {
+          "type": "container",
+          "props": {
+            "className": "flex items-center gap-2"
+          },
+          "children": [
+            {
+              "type": "text",
+              "props": {
+                "text": "✨ Tonight's Night Sky Forecast",
+                "className": "text-base font-bold text-indigo-300"
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "props": {
+            "text": "{{data.location_name}}",
+            "className": "text-xs font-medium text-slate-400"
+          }
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "props": {
+        "className": "flex items-center justify-between p-3.5 bg-indigo-950/40 rounded-xl border border-indigo-500/20"
+      },
+      "children": [
+        {
+          "type": "container",
+          "props": {
+            "className": "flex flex-col"
+          },
+          "children": [
+            {
+              "type": "text",
+              "props": {
+                "text": "Stargazing Index",
+                "className": "text-xs text-slate-400 font-medium"
+              }
+            },
+            {
+              "type": "text",
+              "props": {
+                "text": "{{data.stargazing_rating}} ({{data.stargazing_score}}/100)",
+                "className": "text-lg font-bold text-emerald-400"
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "props": {
+            "text": "☁️ {{data.cloud_cover}}% Clouds",
+            "className": "text-xs font-semibold px-2.5 py-1 bg-slate-800 rounded-full text-slate-300"
+          }
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "props": {
+        "className": "grid grid-cols-2 gap-2"
+      },
+      "children": [
+        {
+          "type": "container",
+          "props": {
+            "className": "p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 flex flex-col"
+          },
+          "children": [
+            {
+              "type": "text",
+              "props": {
+                "text": "🌙 Moon Phase",
+                "className": "text-xs text-slate-400"
+              }
+            },
+            {
+              "type": "text",
+              "props": {
+                "text": "{{data.moon_phase}} ({{data.moon_illumination}}%)",
+                "className": "text-sm font-semibold text-slate-200 mt-0.5"
+              }
+            },
+            {
+              "type": "text",
+              "props": {
+                "text": "Sets: {{data.moon_set_time}}",
+                "className": "text-xs text-slate-400 mt-1"
+              }
+            }
+          ]
+        },
+        {
+          "type": "container",
+          "props": {
+            "className": "p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 flex flex-col"
+          },
+          "children": [
+            {
+              "type": "text",
+              "props": {
+                "text": "🔭 Prime Window",
+                "className": "text-xs text-slate-400"
+              }
+            },
+            {
+              "type": "text",
+              "props": {
+                "text": "{{data.prime_window}}",
+                "className": "text-sm font-semibold text-amber-300 mt-0.5"
+              }
+            },
+            {
+              "type": "text",
+              "props": {
+                "text": "Seeing: {{data.seeing_quality}}",
+                "className": "text-xs text-slate-400 mt-1"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "props": {
+        "className": "flex flex-col gap-1.5"
+      },
+      "children": [
+        {
+          "type": "text",
+          "props": {
+            "text": "Top Visible Objects Tonight:",
+            "className": "text-xs font-semibold text-slate-400 uppercase tracking-wider"
+          }
+        },
+        {
+          "type": "text",
+          "props": {
+            "text": "{{data.visible_targets_summary}}",
+            "className": "text-sm text-slate-200 leading-relaxed p-2.5 bg-slate-800/40 rounded-lg border border-slate-800"
+          }
+        }
+      ]
+    },
+    {
+      "type": "container",
+      "props": {
+        "className": "flex items-center gap-2 pt-1"
+      },
+      "children": [
+        {
+          "type": "button",
+          "props": {
+            "label": "Track Mars",
+            "actionUrl": "agent://{{agent_id}}/get_celestial_body_position?target=Mars",
+            "styling": {
+              "colorTheme": "indigo"
+            },
+            "closeOnClick": false,
+            "submittedLabel": "Target Selected",
+            "className": "flex-1 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+          }
+        },
+        {
+          "type": "button",
+          "props": {
+            "label": "Upcoming Events",
+            "actionUrl": "agent://{{agent_id}}/get_astronomical_events",
+            "styling": {
+              "colorTheme": "slate"
+            },
+            "closeOnClick": false,
+            "submittedLabel": "Events Loaded",
+            "className": "flex-1 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+          }
+        }
+      ]
+    }
+  ]
+}
