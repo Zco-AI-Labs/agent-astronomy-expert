@@ -4,7 +4,7 @@ from typing import Any
 
 import app.core.hubscape_adk
 from app.scripts._ephemeris_utils import fetch_iss_telemetry, get_target_ephemeris
-from app.scripts._weather_utils import geocode_location
+from app.scripts._weather_utils import geocode_location, resolve_observing_location
 from app.scripts.manage_stargazer_profile import manage_stargazer_profile
 
 logger = logging.getLogger(__name__)
@@ -65,36 +65,25 @@ async def get_celestial_body_position(
                 ),
             }
 
-    # 2. Resolve Observing Location
-    loc_display: str | None = None
-    lat: float | None = None
-    lon: float | None = None
+    # 2. Resolve Observing Location (User Arg -> RemoteContext -> Stargazer Profile)
+    loc_info = await resolve_observing_location(location)
+    if not loc_info:
+        return {
+            "status": "location_required",
+            "message": (
+                "No observing location was provided in your query or detected in your active session context. "
+                "Please specify your city, zip code, or coordinates so I can determine where this object is in your sky."
+            ),
+        }
+    if "error" in loc_info:
+        return {
+            "status": "error",
+            "message": loc_info["error"],
+        }
 
-    if location and location.strip():
-        geo = await geocode_location(location)
-        if not geo:
-            return {
-                "status": "error",
-                "message": f"Could not resolve geographical coordinates for '{location}'. Please check the city or provide 'lat,lon' coordinates.",
-            }
-        lat = geo["latitude"]
-        lon = geo["longitude"]
-        loc_display = geo["name"]
-    else:
-        saved = await manage_stargazer_profile(action="get")
-        prof = saved.get("profile")
-        if prof and prof.get("latitude") is not None and prof.get("longitude") is not None:
-            lat = float(prof["latitude"])
-            lon = float(prof["longitude"])
-            loc_display = prof.get("city_name", f"{lat:.2f}°, {lon:.2f}°")
-        else:
-            return {
-                "status": "location_required",
-                "message": (
-                    "No observing location is saved in your profile. Please provide your city, "
-                    "zip code, or coordinates so I can determine where this object is in your sky."
-                ),
-            }
+    lat = loc_info["latitude"]
+    lon = loc_info["longitude"]
+    loc_display = loc_info["name"]
 
     # 3. Resolve Target Datetime
     now = datetime.datetime.now(datetime.UTC)

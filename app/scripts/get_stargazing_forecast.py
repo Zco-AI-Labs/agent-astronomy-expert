@@ -9,7 +9,11 @@ from app.scripts._ephemeris_utils import (
     get_moon_ephemeris,
     get_target_ephemeris,
 )
-from app.scripts._weather_utils import geocode_location, get_weather_forecast
+from app.scripts._weather_utils import (
+    geocode_location,
+    get_weather_forecast,
+    resolve_observing_location,
+)
 from app.scripts.manage_stargazer_profile import manage_stargazer_profile
 
 logger = logging.getLogger(__name__)
@@ -41,37 +45,25 @@ async def get_stargazing_forecast(
         - active_events: Active meteor showers or upcoming highlights.
         - summary: Actionable narrative recommendation for the observer.
     """
-    # 1. Resolve Observing Location
-    loc_display: str | None = None
-    lat: float | None = None
-    lon: float | None = None
+    # 1. Resolve Observing Location (User Arg -> RemoteContext -> Stargazer Profile)
+    loc_info = await resolve_observing_location(location)
+    if not loc_info:
+        return {
+            "status": "location_required",
+            "message": (
+                "No observing location was provided in your query or detected in your active session context. "
+                "Please specify your city, zip code, or coordinates so I can generate your local stargazing forecast."
+            ),
+        }
+    if "error" in loc_info:
+        return {
+            "status": "error",
+            "message": loc_info["error"],
+        }
 
-    if location and location.strip():
-        geo = await geocode_location(location)
-        if not geo:
-            return {
-                "status": "error",
-                "message": f"Could not resolve geographical coordinates for location '{location}'. Please check the city or provide 'lat,lon' coordinates.",
-            }
-        lat = geo["latitude"]
-        lon = geo["longitude"]
-        loc_display = geo["name"]
-    else:
-        # Check saved profile
-        saved = await manage_stargazer_profile(action="get")
-        prof = saved.get("profile")
-        if prof and prof.get("latitude") is not None and prof.get("longitude") is not None:
-            lat = float(prof["latitude"])
-            lon = float(prof["longitude"])
-            loc_display = prof.get("city_name", f"{lat:.2f}°, {lon:.2f}°")
-        else:
-            return {
-                "status": "location_required",
-                "message": (
-                    "No observing location is saved in your profile. Please provide your city, "
-                    "zip code, or coordinates so I can generate an accurate local stargazing forecast."
-                ),
-            }
+    lat = loc_info["latitude"]
+    lon = loc_info["longitude"]
+    loc_display = loc_info["name"]
 
     # 2. Resolve observation date
     now = datetime.datetime.now(datetime.UTC)
@@ -90,17 +82,26 @@ async def get_stargazing_forecast(
 
     # 3. Fetch live weather & astronomy data from Open-Meteo
     weather = await get_weather_forecast(lat, lon, date=date_str)
-    if not weather.get("is_available", True) or "error" in weather:
-        return {
-            "status": "error",
-            "message": f"Unable to retrieve live forecast for {loc_display}: {weather.get('error', 'Weather service offline')}",
-        }
+    weather_available = weather.get("is_available", True) and ("error" not in weather)
+
+    if weather_available:
+        moon_fraction = weather.get("moon_phase_fraction")
+        moonrise_val = weather.get("moonrise_time")
+        moonset_val = weather.get("moonset_time")
+    else:
+        logger.warning(
+            f"Live weather forecast unavailable for {loc_display}: {weather.get('error')}. "
+            "Gracefully degrading to orbital celestial ephemerides."
+        )
+        moon_fraction = None
+        moonrise_val = None
+        moonset_val = None
 
     moon = get_moon_ephemeris(
         target_dt,
-        moon_phase_fraction=weather.get("moon_phase_fraction"),
-        moonrise_str=weather.get("moonrise_time"),
-        moonset_str=weather.get("moonset_time"),
+        moon_phase_fraction=moon_fraction,
+        moonrise_str=moonrise_val,
+        moonset_str=moonset_val,
     )
 
     # 4. Check prime planet and deep-sky visibility
@@ -126,35 +127,43 @@ async def get_stargazing_forecast(
     visible_targets.sort(key=lambda x: x["altitude"], reverse=True)
 
     # 5. Compute Stargazing Index Score
-    cloud_cover = weather.get("cloud_cover", 0)
     illumination = moon.get("illumination_percent", 0)
-    seeing = weather.get("seeing_quality", "Good (Slight Atmospheric Haze)")
-    score, rating_label = compute_stargazing_index(cloud_cover, illumination, seeing)
+    if weather_available:
+        cloud_cover = weather.get("cloud_cover", 0)
+        seeing = weather.get("seeing_quality", "Good (Slight Atmospheric Haze)")
+        score, rating_label = compute_stargazing_index(cloud_cover, illumination, seeing)
+        sunset_str = weather.get("sunset_time")
+        moonset_str = weather.get("moonset_time")
+        if cloud_cover > 75:
+            prime_window = "Cloud obscured / Limited clear breaks"
+        elif sunset_str:
+            if moonset_str and illumination > 35:
+                prime_window = f"After moonset (~{moonset_str}) until dawn"
+            else:
+                prime_window = f"Post-twilight (~1 hr after {sunset_str}) through midnight"
+        else:
+            prime_window = "Post-twilight into late night"
+    else:
+        cloud_cover = 0
+        seeing = "Unverified (Weather Service Offline)"
+        score, _ = compute_stargazing_index(cloud_cover, illumination, "Good")
+        rating_label = "Unverified Conditions (Awaiting Clear Skies)"
+        sunset_str = None
+        moonset_str = None
+        prime_window = "Post-twilight (~1 hr after dusk) through midnight"
 
     # 6. Active Meteor Showers
     meteor_showers = get_active_meteor_showers(target_dt)
 
-    # 7. Compute Prime Viewing Window dynamically
-    sunset_str = weather.get("sunset_time")
-    moonset_str = weather.get("moonset_time")
-    if cloud_cover > 75:
-        prime_window = "Cloud obscured / Limited clear breaks"
-    elif sunset_str:
-        if moonset_str and illumination > 35:
-            prime_window = f"After moonset (~{moonset_str}) until dawn"
-        else:
-            prime_window = f"Post-twilight (~1 hr after {sunset_str}) through midnight"
-    else:
-        prime_window = "Post-twilight into late night"
-
+    # 7. Targets summary
     targets_bullet_list = [f"{t['name']} in the {t['direction']} ({t['optics']})" for t in visible_targets[:4]]
     targets_summary = ", ".join(targets_bullet_list) if targets_bullet_list else "Seasonal star fields and asterisms"
 
     widget_data = {
         "location_name": loc_display,
         "stargazing_score": str(score),
-        "stargazing_rating": rating_label.split(" ")[0],  # "Excellent", "Good", "Fair", "Poor"
-        "cloud_cover": str(cloud_cover),
+        "stargazing_rating": rating_label.split(" ")[0],  # "Excellent", "Good", "Fair", "Poor", "Unverified"
+        "cloud_cover": str(cloud_cover) if weather_available else "--",
         "moon_phase": moon.get("phase_name", "Waxing Crescent"),
         "moon_illumination": str(illumination),
         "moon_set_time": moonset_str or "N/A",
@@ -175,7 +184,13 @@ async def get_stargazing_forecast(
         logger.debug(f"Could not render night_sky_forecast widget: {e}")
 
     # 9. Format narrative summary
-    if weather.get("is_overcast"):
+    if not weather_available:
+        narrative = (
+            f"Note: Live meteorological cloud cover for {loc_display} is temporarily unreachable, but your astronomical viewing targets are calculated. "
+            f"The Moon is in its {moon['phase_name']} phase at {illumination}% illumination. "
+            f"Top visible celestial bodies positioned above your horizon tonight include: {targets_summary}."
+        )
+    elif weather.get("is_overcast"):
         narrative = (
             f"Overcast skies ({cloud_cover}% cloud cover) in {loc_display} will obstruct celestial viewing tonight. "
             f"Atmospheric conditions are rated {rating_label.upper()} ({score}/100). We recommend checking back on clearer nights."
@@ -196,12 +211,13 @@ async def get_stargazing_forecast(
         "stargazing_score": score,
         "stargazing_rating": rating_label,
         "weather": {
-            "cloud_cover_percent": cloud_cover,
+            "cloud_cover_percent": cloud_cover if weather_available else None,
             "seeing_quality": seeing,
-            "temperature_f": weather.get("temperature_f"),
-            "precipitation_probability": weather.get("precipitation_probability"),
-            "sunset_time": weather.get("sunset_time"),
-            "sunrise_time": weather.get("sunrise_time"),
+            "temperature_f": weather.get("temperature_f") if weather_available else None,
+            "precipitation_probability": weather.get("precipitation_probability") if weather_available else None,
+            "sunset_time": sunset_str,
+            "sunrise_time": weather.get("sunrise_time") if weather_available else None,
+            "is_available": weather_available,
         },
         "moon": moon,
         "prime_window": prime_window,

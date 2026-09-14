@@ -73,3 +73,48 @@ async def test_get_astronomical_events_tool():
     assert "upcoming_events" in events
     assert "viewing_tips" in events
 
+
+@pytest.mark.asyncio
+async def test_get_stargazing_forecast_with_remote_context():
+    from app.core.hubscape_adk import RemoteContext, context_session
+
+    ctx = RemoteContext(
+        user_id="test_user_rc",
+        raw_context={
+            "user_location": {
+                "latitude": 40.0150,
+                "longitude": -105.2705,
+                "city": "Boulder, CO",
+            }
+        },
+    )
+    with context_session(ctx):
+        forecast = await get_stargazing_forecast(location=None, date="2026-09-12")
+        assert forecast["status"] == "success"
+        assert "Boulder" in forecast["location_name"]
+        assert "stargazing_score" in forecast
+        assert 0 <= forecast["stargazing_score"] <= 100
+
+
+@pytest.mark.asyncio
+async def test_get_stargazing_forecast_override_remote_context():
+    from app.core.hubscape_adk import RemoteContext, context_session
+
+    ctx = RemoteContext(
+        user_id="test_user_rc",
+        raw_context={
+            "user_location": {
+                "latitude": 40.0150,
+                "longitude": -105.2705,
+                "city": "Boulder, CO",
+            }
+        },
+    )
+    with context_session(ctx):
+        forecast = await get_stargazing_forecast(
+            location="Paris, France", date="2026-09-12"
+        )
+        assert forecast["status"] == "success"
+        assert "Paris" in forecast["location_name"]
+
+
