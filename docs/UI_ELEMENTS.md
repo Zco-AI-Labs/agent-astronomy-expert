@@ -4,6 +4,110 @@ This catalog outlines the available **Lego UI elements** supported by the Hubsca
 
 ---
 
+## 📍 The 3 UI Display Paradigms (Chat vs. Side Bar vs. App Mode)
+
+Hubscape provides three distinct spatial surfaces where agents can render interactive interfaces:
+
+| Dimension | 💬 1. Inline Chat (`target="inline"`) | 🎛️ 2. Tactical Side Bar (`target="sidebar"`) | 🚀 3. Full-Screen App Mode (`target="app_mode"`) |
+| :--- | :--- | :--- | :--- |
+| **Primary Use Case** | Quick forms, order receipts, confirmations, short surveys, one-off approval gates. | Live dashboards, audio/video players, to-do task boards, long-form forms, reference tools. | Expansive interactive workspaces (e.g. flight maps, graph visualizers, external web apps). |
+| **Viewport Surface** | Chat timeline stream (scrolls naturally with conversation). | Pinned 384px (`w-96`) dock on desktop; off-canvas slide-out drawer on mobile. | Main viewport promotes to full canvas; Side Bar becomes companion dock (65% remote / 35% chat). |
+| **Persistence** | Transient; converts to read-only receipt on submit. | Persistent across prompts; appends to recent tabs carousel with horizontal scrolling. | Dedicated workspace session until user clicks `[ EXIT APP ]` or another app is launched. |
+| **Chat Footprint** | Renders full widget inline in message history. | Leaves an interactive bookmark card: `[ {Title} ready in Side Bar ↗ ]`. | Leaves an interactive launch card: `[ {Title} ready to launch ↗ ]`. |
+| **Python ADK API** | `ctx.show_widget(id, data, target="inline")`<br>`ctx.show_custom_ui(layout, data, target="inline")` | `ctx.show_widget(id, data, target="sidebar")`<br>`ctx.show_custom_ui(layout, data, target="sidebar")` | `ctx.launch_app_mode(app_id, canvas_widget, remote_widget, title, icon, actions)` |
+
+---
+
+### Option 1: Inline Chat (`target="inline"`, Default)
+Inline widgets render directly within the conversational timeline.
+* **When to use:** Short, sequential form interactions (e.g. confirming appointment dates, picking a radio option, collecting an address).
+* **Lifecycle:** When submitted, buttons can trigger optimistic collapse (`closeOnClick: true`) or convert into immutable read-only receipts.
+* **Error Resilience:** In-flight submissions buffer inputs automatically; if backend validation fails, the widget re-renders with previous inputs pre-populated.
+
+```python
+# Display a template widget directly in the chat stream
+ctx.show_widget("appointment_picker_v1", data={"available_slots": slots}, target="inline")
+```
+
+---
+
+### Option 2: Tactical Side Bar (`target="sidebar"`)
+Routes the widget to the user's persistent 384px (`w-96`) Side Bar console on desktop, or off-canvas slide-out drawer on mobile.
+* **When to use:** Multi-step workflows, task lists, live telemetry, media players, or documents that the user needs to continuously reference while chatting.
+* **Navigation & Tabs:** Automatically creates a tab in the top carousel with horizontal pan chevrons. The user can switch between workspace home, recent tools, and active widgets at any time.
+* **Chat Footprint:** Chat displays a sleek, emerald-accented bookmark card (`[ {Title} ready in Side Bar ↗ ]`) that focuses the drawer when tapped.
+
+```python
+# Route a live task board or document editor to the persistent Side Bar
+ctx.show_widget("task_board_v1", data={"tasks": tasks}, target="sidebar")
+
+# Or render dynamic generative Lego UI directly in the Side Bar
+ctx.show_custom_ui(layout=custom_layout, data=custom_data, target="sidebar")
+```
+
+---
+
+### Option 3: Full-Screen App Mode (`launch_app_mode`)
+Promotes the entire main viewport into a dedicated application canvas, paired with an optional companion remote control in the Side Bar dock and bottom-anchored companion chat.
+* **When to use:** Expansive visual workflows (maps, CAD previews, analytics dashboards, multi-pane editors, third-party web apps via iframes).
+* **Dual-Surface Architecture:**
+  1. **Canvas Stage (`canvas_widget`):** Takes 100% of the main viewport. Can be a complex Lego UI container or an HTML5 iframe pointing to an internal or external web app.
+  2. **Companion Remote Dock (`remote_widget`, Optional):** Pinned in the top 65% of the Side Bar dock above the bottom 35% companion chat. Allows quick filters, sliders, and controls without cluttering the canvas. If omitted, the sidebar stays on standard workspace navigation.
+* **Top App Toolbar:**
+  - **Platform Controls:** Strictly two controls: `[ EXIT APP ]` (immediate zero-dialog return to chat) and mobile `[ ☰ ]` drawer toggle.
+  - **Optional Branding:** Optional `title` and `icon` supplied by the agent developer.
+  - **Dynamic Tool Buttons (`actions`):** Agent-defined buttons with:
+    - `actionType: 'api_call'`: Executes an authenticated backend REST call. **Security Shield:** Restricts endpoints to relative paths starting with `/api/`.
+    - `actionType: 'bridge'`: Broadcasts `TOOLBAR_ACTION` events directly to the canvas/iframe via the inter-widget bridge.
+    - `actionType: 'chat_command'`: Dispatches a conversational command to the active agent session.
+    - `showFeedback: boolean`: If `true`, displays a transient spinner and success badge on click. If omitted or `false`, remains completely static.
+* **Single Active App Collision Shield:** The platform enforces a 1-active-app constraint. If another App Mode app is triggered, the user receives an interactive conflict dialog (`[ Keep Current App ]` vs `[ Exit & Launch New App ]`).
+
+```python
+# Launch a full-screen application with canvas, companion remote, and toolbar tools
+ctx.launch_app_mode(
+    app_id="flight_tracker",
+    canvas_widget={
+        "widgetConfig": {
+            "type": "iframe",
+            "src": "/apps/flight_map"
+        },
+        "data": {"center": "ORD"}
+    },
+    remote_widget={
+        "widgetConfig": {
+            "type": "container",
+            "props": {"gap": "sm", "padding": "md"},
+            "children": [
+                {"type": "text", "props": {"text": "Flight Controls", "weight": "bold"}},
+                {"type": "button", "props": {"label": "Refresh Radar", "actionUrl": "agent://radar/refresh"}}
+            ]
+        }
+    },
+    title="Tactical Flight Radar",
+    icon="Command",
+    actions=[
+        {
+            "id": "save_telemetry",
+            "label": "Save Log",
+            "icon": "Save",
+            "actionType": "api_call",
+            "endpoint": "/api/flights/save",
+            "showFeedback": True,
+            "successLabel": "Saved!"
+        },
+        {
+            "id": "toggle_satellite",
+            "label": "Satellite View",
+            "icon": "Layers",
+            "actionType": "bridge"
+        }
+    ]
+)
+```
+
+---
+
 ## 🎨 Styling Systems: Tailwind CSS vs. Explicit Props
 
 Hubscape UI components support two main ways to control styling and layout:
@@ -19,6 +123,8 @@ Renders a container box to group children. Use Tailwind classes to design grids,
 
 ### Props:
 * `className` (string): Standard Tailwind CSS utility classes.
+  * **Smart Default Classes:** If no custom classes are supplied, containers default to `p-4 border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm rounded-lg flex flex-col`.
+  * **Layout Overrides:** When `className` includes custom layout (`flex`, `grid`), padding (`p-*`), border (`border*`), or background (`bg-*`), the default card background and borders are automatically omitted. This allows seamless nested components, LCARS consoles, status panels, and dense dashboard grids without fighting default card padding and borders.
 * `children` (array): A list of nested element configurations.
 
 ### Example JSON:
@@ -45,6 +151,7 @@ Displays formatted text blocks.
 ### Props:
 * `text` (string): Text content to display. Supports variable interpolations if loaded from a widget template.
 * `className` (string): Tailwind CSS classes for size, color, weight, and layout (e.g. `text-lg font-semibold text-slate-800`).
+  * **Dark Mode Color Preservation:** If `className` defines an explicit text color (e.g. `text-amber-400`, `text-emerald-400`, `text-red-500`, `text-[#ff9900]`), the default dark-mode text color (`dark:text-slate-100`) is automatically bypassed, ensuring high-contrast sci-fi accents, badges, and alerts render cleanly in dark mode.
 
 ### Example JSON:
 ```json
@@ -63,12 +170,15 @@ Displays formatted text blocks.
 Renders an interactive button. When clicked, it packages the input values of all elements inside its container parent and dispatches an action to the target `actionUrl`.
 
 > [!IMPORTANT]
-> **Atomic Viewport Rule:** Only ONE interactive form or widget can be active in the viewport at a time. The button props below control whether the widget transitions into a read-only receipt upon submission or immediately collapses.
+> **Atomic Viewport Rule:** In inline chat mode, only ONE interactive form or widget can be active in the viewport at a time. The button props below control whether the widget transitions into a read-only receipt upon submission or immediately collapses. In the Side Bar or App Mode, widgets remain persistently active.
 
 ### Props:
 * `label` (string): Button display text (default: `"Submit"`).
 * `actionUrl` (string): Target destination URL or protocol URI:
   * `agent://<agent_id>/<action_name>`: Deterministically dispatches action to target agent without Host LLM ambiguity.
+  * `app://<action_name>?<key>=<value>&announcement=<text>`: **Zero-LLM Local Bridge Protocol for App Mode.** Instantly dispatches client-side state updates between the companion remote dock and canvas stage with **0ms latency and 0 LLM token cost**. Query parameters automatically parse (strings, numbers, booleans) into the shared application state. Special query parameters:
+    * `announcement`: Formats and appends a local announcement directly to the companion chat timeline without triggering an LLM agent turn.
+    * `silent=true`: Suppresses chat announcements entirely.
   * `client://close_widget?text=...`: Immediately cancels and unmounts the widget client-side with 0 network calls.
   * HTTP Endpoint: Standard POST path (e.g. `/api/plugins/{{agent_id}}/update_settings`).
 * `closeOnClick` (boolean): When `true`, performs an **instant 0ms optimistic collapse**, immediately unmounting the widget upon valid submission and displaying the confirmation text. When `false` or omitted, defaults to **Read-Only Receipt Mode** where the form locks in place.
@@ -76,7 +186,9 @@ Renders an interactive button. When clicked, it packages the input values of all
   * In *Optimistic Collapse Mode* (`closeOnClick: true`), this text is displayed in the chat message in place of the collapsed form.
   * In *Read-Only Receipt Mode*, this text is displayed inside the green status badge replacing the submit button.
 * `hideOnSubmit` (boolean): When `true`, this button is automatically hidden once the form has been submitted (ideal for Cancel/Dismiss buttons).
-* `styling` (object): Theme styling object (e.g. `{"colorTheme": "indigo" | "pink" | "blue" | "slate"}`).
+* `styling` (object): Theme styling object:
+  * `colorTheme` (string): Supported themes: `"blue"`, `"red"`, `"green"`, `"emerald"`, `"amber"`, `"indigo"`, `"violet"`.
+  * `borderRadius` (string): `"none"`, `"sm"`, `"md"`, `"lg"`, `"xl"`, `"full"`.
 * `className` (string): Tailwind CSS utility styling classes.
 
 ### Example 1: Submit Button with Optimistic Collapse (`closeOnClick: true`)
@@ -106,7 +218,19 @@ Renders an interactive button. When clicked, it packages the input values of all
 }
 ```
 
-### Example 3: Submit Button with Read-Only Receipt Transition (Default)
+### Example 3: App Mode Local Zero-LLM Remote Action (`app://`)
+```json
+{
+  "type": "button",
+  "props": {
+    "label": "Activate Turbo",
+    "actionUrl": "app://set_speed?speed=100&turbo=true&announcement=Turbo+mode+engaged!",
+    "styling": { "colorTheme": "emerald" }
+  }
+}
+```
+
+### Example 4: Submit Button with Read-Only Receipt Transition (Default)
 ```json
 {
   "type": "button",

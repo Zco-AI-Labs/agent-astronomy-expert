@@ -267,28 +267,66 @@ print(f"Executing: {' '.join(cmd)}")
 subprocess.run(cmd, env=env, check=True)
 print("🎉 Deployment completed successfully!")
 
-# Trigger dynamic registry sync on backend
-try:
-    import urllib.request
-    import json
-    
+# Helper to resolve HMAC secret for platform registry sync
+def get_sync_secret(project_id: str) -> str:
+    # 1. Direct environment override
+    secret = os.getenv("HUBSCAPE_HMAC_SECRET") or os.getenv("HUBSCAPE_KMS_MASTER_KEY")
+    if secret:
+        return secret
+        
+    # 2. Retrieve real production master secret from Google Cloud Secret Manager
+    try:
+        from google.cloud import secretmanager
+        sm_client = secretmanager.SecretManagerServiceClient()
+        secret_name = f"projects/{project_id}/secrets/HUBSCAPE_KMS_MASTER_KEY/versions/latest"
+        response = sm_client.access_secret_version(request={"name": secret_name})
+        resolved = response.payload.data.decode("UTF-8").strip()
+        print("🔑 Retrieved HUBSCAPE_KMS_MASTER_KEY from Google Cloud Secret Manager.")
+        return resolved
+    except Exception as sm_err:
+        print(f"ℹ️ Could not fetch HUBSCAPE_KMS_MASTER_KEY from Secret Manager: {sm_err}")
+        
+    # 3. Standard fallback for local dev environments
+    return "hubscape-development-master-key-fallback"
+
+def trigger_platform_sync(project_id: str):
     backend_url = os.getenv("HUBSCAPE_BACKEND_URL", "https://hubscape-backend-w3xi4ozhca-uc.a.run.app")
-    secret = os.getenv("HUBSCAPE_HMAC_SECRET", "dev_secret_key_dont_use_in_prod")
+    secret = get_sync_secret(project_id)
     
-    url = f"{backend_url.rstrip('/')}/api/agents/sync"
-    req = urllib.request.Request(
-        url,
-        data=b"",
-        headers={
-            "X-Hubscape-Secret": secret,
-            "Content-Type": "application/json"
-        },
-        method="POST"
-    )
+    endpoints = ["/admin/agents/sync", "/api/agents/sync"]
+    success = False
     
-    print(f"📡 Triggering immediate agent registry sync on local backend: {url}")
-    with urllib.request.urlopen(req, timeout=10) as response:
-        res_data = json.loads(response.read().decode())
-        print(f"✅ Sync Response: {res_data.get('message', 'Success')}")
-except Exception as e:
-    print(f"ℹ️ Local backend sync trigger skipped or failed: {e} (Backend might not be running locally)")
+    for endpoint in endpoints:
+        url = f"{backend_url.rstrip('/')}{endpoint}"
+        print(f"📡 Triggering immediate agent registry sync on platform backend: {url}")
+        try:
+            import urllib.request
+            import urllib.error
+            import json
+            req = urllib.request.Request(
+                url,
+                data=b"",
+                headers={
+                    "X-Hubscape-Secret": secret,
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=15) as response:
+                res_data = json.loads(response.read().decode())
+                print(f"✅ Platform Agent Registry synced successfully: {res_data.get('message', 'Success')}")
+                success = True
+                break
+        except urllib.error.HTTPError as http_err:
+            try:
+                err_body = http_err.read().decode()
+            except Exception:
+                err_body = str(http_err)
+            print(f"⚠️ Sync call to {url} failed with HTTP {http_err.code}: {err_body}")
+        except Exception as e:
+            print(f"⚠️ Sync call to {url} failed: {e}")
+            
+    if not success:
+        print("⚠️ Warning: Platform backend sync could not be completed automatically. Verify network access or trigger manual sync in Admin Portal.")
+
+trigger_platform_sync(PROJECT_ID)

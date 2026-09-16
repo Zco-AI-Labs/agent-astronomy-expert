@@ -27,7 +27,7 @@ Conduct an interactive scoping interview by prompting the developer for the foll
 3. **External Integrations & Connections:** Does it need to connect to third-party services? Does it require Model Context Protocol (MCP) servers, custom OAuth2 providers, or outbound Agent-to-Agent (A2A) connections?
 4. **Required Secrets (Vault Config):** What external API keys or client credentials does the agent need to function in production? These will be supplied to the platform Secrets Vault during deployment.
 5. **Key Features:** What are the top 3-4 features?
-6. **Visual Elements:** What widgets or cards does the user need to interact with?
+6. **Visual Elements & Viewport Targets:** What widgets or cards does the user need to interact with? Should each component render **inline in chat** (`inline`), docked persistently in the **Tactical Side Bar** (`sidebar`), or launched into **full-screen App Mode** (`app_mode`)?
 7. **Non-Visual Fallbacks:** How will the user interact with this agent via SMS (text-only) or Voice/Phone calls?
 
 ### Phase B: Functional Specification Gating (User Review Required)
@@ -45,7 +45,7 @@ Once the functional specification is approved, translate it into technical speci
 1. **Scaffold Technical Files:** Create and populate the remaining blueprint files:
     * `5_architecture_capabilities.md`: System instructions definition (destined for `app/SKILL.md`), Python tool function signatures/type-hints (destined for individual modules in `app/scripts/{tool_name}.py`), the Tool Permissions Matrix mapping permissions to tools, external connection mappings (MCP, A2A, custom providers), and required secrets list.
     * `6_data_architecture.md`: Scoped collections, document ID formats, and schemas fields table.
-    * `7_user_interface.md`: UI Lego block JSON widget layouts (destined for `app/ui/widgets/`).
+    * `7_user_interface.md`: UI Lego block JSON widget layouts, viewport target specifications (`inline`, `sidebar`, `app_mode`), and App Mode configuration blocks.
     * `8_verification_qa.md`: Automated testing commands (targeting `tests/`) and manual checklists.
     * `9_implementation_tasks.md`: Detailed file-by-file configuration and logic checklist to act as the execution guide for the coding agent.
 2. Ensure the following rules are strictly enforced:

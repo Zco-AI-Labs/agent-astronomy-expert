@@ -35,10 +35,31 @@ Every widget template consists of a root layout component (usually a `container`
 
 ---
 
+## 📍 The 3 Spatial Viewport Targets (Chat vs. Side Bar vs. App Mode)
+
+Agents can render widgets into three distinct spatial surfaces:
+
+1. **Inline Chat (`target="inline"`, Default):**
+   - Renders directly in the conversational message history.
+   - Ideal for brief surveys, confirmations, and sequential forms.
+   - Converts to a read-only receipt upon submission (or collapses if `closeOnClick: true`).
+2. **Tactical Side Bar (`target="sidebar"`):**
+   - Docks persistently into the 384px (`w-96`) right drawer / side bar on desktop.
+   - Leaves a sleek bookmark card in chat (`[ {Title} ready in Side Bar ↗ ]`).
+   - Ideal for dashboards, live telemetry, task lists, and reference cards that users interact with while chatting.
+3. **Full-Screen App Mode (`context.launch_app_mode`):**
+   - Promotes the main viewport into a full-screen application canvas (`canvas_widget`).
+   - Docks an optional companion remote control (`remote_widget`) in the top 65% of the Side Bar dock, above the bottom 35% companion chat.
+   - Provides a top application toolbar with `[ EXIT APP ]` and agent tool action buttons.
+   - Ideal for expansive visual applications (interactive maps, game boards, LCARS consoles, full editors, iframes).
+
+---
+
 ## 🧱 Core Component Catalog & Props
 
 > [!IMPORTANT]
-> **Official Component Reference:** For the complete specification and details on Lego UI elements, refer directly to the [Lego Widgets & IFrames Guide](file:///Users/rajvekeria/Documents/GitHub/hubscape-agent-template/docs/Hubscape-Agent-Template-Guide/CHAPTER_6_LEGO_WIDGETS_AND_IFRAMES> The standard registry of supported elements is:
+> **Official Component Reference:** For the complete specification and details on Lego UI elements, refer directly to the [ADK Lego Widgets & IFrames Guide](file://docs/Hubscape-ADK-Manual/CHAPTER_6_LEGO_WIDGETS_AND_IFRAMES.md) and the [UI Elements Catalog](file://docs/UI_ELEMENTS.md).
+> The standard registry of supported elements is:
 > `container`, `text`, `icon`, `image`, `spacer`, `button`, `input`, `select`, `iframe`, `calendar-grid`, `table`, `list`, `progress`, `youtube`, `media-player`, `file-handler`, `human-approval-gate`, `flow-chart`, `toggle`, `choice-picker`, `slider`, `tabs`, `accordion`, `live-error-banner`.
 
 Below are the most common component types and their configurations:
@@ -50,6 +71,7 @@ Groups and aligns nested components.
   * `gap` (string): `"xs"`, `"sm"`, `"md"`, `"lg"`
   * `padding` (string): `"xs"`, `"sm"`, `"md"`, `"lg"`
   * `className` (string): Optional custom Tailwind utility classes for advanced styling.
+    * **Smart Card Defaults vs. Layout Overrides:** If no custom classes are supplied, containers render as a standard white/slate card with padding and border. When `className` provides layout (`flex`, `grid`), padding (`p-*`), border (`border*`), or background (`bg-*`), the default card styling is automatically omitted. This allows seamless nested components, LCARS interfaces, status panels, and dense dashboards without fighting default borders or padding.
 
 ### 2. Text (`text`)
 Displays headings, labels, or paragraphs.
@@ -58,6 +80,7 @@ Displays headings, labels, or paragraphs.
   * `size` (string): `"xs"`, `"sm"`, `"md"`, `"lg"`, `"xl"`
   * `weight` (string): `"normal"`, `"medium"`, `"bold"`
   * `className` (string): Optional Tailwind overrides.
+    * **Dark Mode Color Preservation:** If `className` defines an explicit text color (e.g. `text-amber-400`, `text-emerald-400`, `text-red-500`), the default dark-mode text color is automatically bypassed, ensuring high-contrast accents and alert statuses render cleanly in dark mode.
 
 ### 3. Input (`input`)
 Renders text fields, multi-line text areas, numeric entries, or date/time pickers.
@@ -77,10 +100,17 @@ Renders interactive submit/action buttons.
 * **Props:**
   * `label` (string): Display text of the button.
   * `actionUrl` (string): **REQUIRED.** The URI protocol to hit. Standard formats:
-    * `agent://<action_name>`: Intercepted by the platform to trigger an async slash command callback `/action <action_name> <payload>` back to the agent.
+    * `agent://<agent_id>/<action_name>`: Intercepted by the platform to trigger an async action command `/action <action_name> <payload>` back to the agent backend tool.
+    * `app://<action_name>?<key>=<value>&announcement=<text>`: **Zero-LLM Local Bridge Protocol for App Mode.** Instantly dispatches client-side state updates between the companion remote dock and canvas stage with **0ms latency and 0 LLM token cost**. Query parameters automatically parse into shared application state. Special query parameters:
+      * `announcement`: Dispatches a formatted announcement directly to companion chat without an LLM turn.
+      * `silent=true`: Suppresses chat announcements entirely.
+    * `client://close_widget?text=...`: Immediately cancels and unmounts the widget client-side with 0 network calls.
     * `/api/plugins/{{agent_id}}/<route>`: Direct API POST call to the agent's webserver.
+  * `closeOnClick` (boolean): When `true`, performs an instant 0ms optimistic collapse. When `false` or omitted, form locks into a read-only receipt upon submission.
+  * `submittedLabel` (string): Confirmation badge or message text shown upon submit.
   * `styling` (object):
-    * `colorTheme` (string): Accent color palette (e.g. `"blue"`, `"green"`, `"red"`).
+    * `colorTheme` (string): Accent color palette: `"blue"`, `"red"`, `"green"`, `"emerald"`, `"amber"`, `"indigo"`, `"violet"`.
+    * `borderRadius` (string): `"none"`, `"sm"`, `"md"`, `"lg"`, `"xl"`, `"full"`.
 
 ### 5. Live Error Banner (`live-error-banner`)
 Renders a standardized error alert card for live monitoring process failures with diagnostic details expander and optional retry actions.
@@ -180,9 +210,93 @@ Below is a complete, working reference widget template (`app/ui/widgets/contact_
     }
   ]
 }
-```   }
-  ]
-}
+```
+
+---
+
+## 📍 Designing for the 3 Viewport Surfaces (Chat vs. Side Bar vs. App Mode)
+
+When designing widgets, the Agent UI Creator must tailor the component layout and data flow to the intended display surface:
+
+### 1. Surface 1: Inline Chat Widgets (`target="inline"`)
+* **Physical Constraints:** Renders inside the conversational timeline stream. Maximum recommended width is ~480px.
+* **Layout Principles:**
+  - Strict vertical stacking (`"direction": "vertical"`).
+  - Compact spacing (`"gap": "sm"`, `"padding": "md"`).
+  - Single focused interaction: designed for quick data entry (e.g. 1–3 fields) or confirmation before returning to conversation.
+* **Lifecycle:** Use `"closeOnClick": true` on submit buttons for transient forms that vanish into a 1-line confirmation text, or omit it to leave a locked, read-only status receipt.
+
+---
+
+### 2. Surface 2: Tactical Side Bar Widgets (`target="sidebar"`)
+* **Physical Constraints:** Pinned 384px (`w-96`) width on desktop; full-screen slide-over drawer on mobile. Vertical scrolling is enabled automatically.
+* **Layout Principles:**
+  - Design for persistent reference: the user continues chatting while referencing this panel.
+  - Multi-section layouts: use `accordion`, `tabs`, `list`, and `table` components to organize complex information.
+  - Action buttons: place primary operations (e.g. "Save", "Refresh", "Filter") at the top or bottom of the container.
+* **Navigation:** The platform automatically mounts Side Bar widgets into the top carousel with horizontal scroll chevrons and leaves an interactive bookmark card in chat (`[ {Title} ready in Side Bar ↗ ]`).
+
+---
+
+### 3. Surface 3: Full-Screen App Mode (`target="app_mode"`, `launch_app_mode`)
+Full-screen App Mode transforms the interface into a dual-surface application runtime:
+
+#### A. The Canvas Stage (`canvas_widget`)
+* **Physical Constraints:** Occupies 100% of the main viewport (`flex-1 h-full`). Full width and height.
+* **Component Architecture:**
+  - **Lego Layout:** Root container with `"className": "w-full h-full flex flex-col p-4"` using multi-column flex/grid containers, interactive charts, and rich tables.
+  - **IFrame Web App:** Point `widgetConfig.src` to a relative HTML page (e.g. `/api/agents/{{agent_id}}/static/app.html`) for high-performance canvas, 3D graphics, or complex custom frontends.
+
+#### B. The Companion Remote Dock (`remote_widget`, Optional)
+* **Physical Constraints:** Pinned in the top 65% of the Side Bar dock above the bottom 35% companion chat.
+* **Layout Principles:**
+  - Keep controls compact: small buttons (`"size": "sm"`), icon buttons, toggle switches, and parameter sliders.
+  - Dedicated controller: use this space for filters, zoom levels, modes, or throttles that manipulate the main canvas.
+  - **Omission Rule:** If the application does not need companion controls, omit `remote_widget`. The sidebar will cleanly remain on standard workspace tools.
+
+#### C. App Toolbar Actions (`actions`)
+The universal top bar provides platform controls (`[ EXIT APP ]` and mobile `[ ☰ ]`). You can supply optional tool action buttons:
+```json
+[
+  {
+    "id": "save_project",
+    "label": "Save Changes",
+    "icon": "Save",
+    "actionType": "api_call",
+    "endpoint": "/api/plugins/{{agent_id}}/save",
+    "showFeedback": true,
+    "successLabel": "Saved!"
+  },
+  {
+    "id": "toggle_grid",
+    "label": "Grid",
+    "icon": "Grid",
+    "actionType": "bridge"
+  }
+]
+```
+* **Security Guard:** `actionType: 'api_call'` endpoints **MUST** begin with `/api/`. Non-relative or external URLs are rejected.
+* **Feedback Switch:** Set `showFeedback: true` to display an inline loading spinner and success checkmark during async calls.
+
+#### D. The Inter-Widget Reactive Bridge
+Canvas and remote widgets can communicate in real time without backend roundtrips:
+* **From IFrame to Parent Runtime:**
+  ```javascript
+  // Broadcast an announcement to the active chat log
+  window.parent.postMessage({
+    type: 'HUBSCAPE_APP_BRIDGE',
+    action: 'POST_CHAT',
+    payload: { text: 'Telemetry check passed.', senderName: 'Diagnostic Console' }
+  }, '*');
+
+  // Synchronize shared state with the companion remote
+  window.parent.postMessage({
+    type: 'HUBSCAPE_APP_BRIDGE',
+    action: 'UPDATE_STATE',
+    payload: { activeFilter: 'anomalies' }
+  }, '*');
+  ```
+* **Listening in IFrame:** Listen for `event.data.type === 'HUBSCAPE_APP_BRIDGE'` to receive state updates and toolbar action clicks.
 
 ---
 
@@ -198,4 +312,3 @@ When referencing dynamic data inside widget templates (e.g., text fields, image 
 1. **Catalog Enforcement:** Root elements MUST have `"type": "container"` with nested elements in `"children"`.
 2. **Layout Enforcement:** Never invent custom layouts or schemas (like `"layout": "list_tiles"` or `"layout": "card_grid"`). Render grids or lists using the standard `list`, `table`, or nested `container` components.
 3. **No External Redirection Buttons:** Buttons trigger backend form actions (POST). Do not assign full external URLs to `actionUrl`. Instead, load a local static helper page (e.g., `/api/agents/{{agent_id}}/static/redirect.html`) inside an `iframe` component that uses a standard anchor link with `target="_blank"`.
-```

@@ -11,7 +11,7 @@ try:
     load_dotenv()
 except ImportError:
     pass
-from typing import Generator, Optional
+from typing import Generator, Optional, List, Dict, Any
 from google.cloud import firestore
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,11 @@ class RemoteContext:
     @property
     def user_privileges(self) -> list:
         return self.raw_context.get("user_privileges") or self.raw_context.get("userPrivileges") or []
+
+    @property
+    def session_metadata(self) -> dict:
+        meta = self.raw_context.get("session_metadata") or self.raw_context.get("sessionMetadata")
+        return meta if isinstance(meta, dict) else ({"value": meta} if meta else {})
 
     @property
     def base_url(self) -> str:
@@ -280,8 +285,14 @@ class RemoteContext:
         if blob.exists():
             blob.delete()
 
-    def show_widget(self, widget_template_id: str, data: dict = None) -> dict:
-        """Loads a predefined widget JSON and registers a client action directive to show it."""
+    def show_widget(self, widget_template_id: str, data: dict = None, target: str = "inline") -> dict:
+        """Loads a predefined widget JSON and registers a client action directive to show it.
+        
+        Args:
+            widget_template_id: ID or filename of the widget template.
+            data: Optional dictionary of dynamic values for template interpolation.
+            target: Display location - 'inline' (default, in chat flow) or 'sidebar' (persistent side bar).
+        """
         try:
             import os
             import json
@@ -310,7 +321,7 @@ class RemoteContext:
             if data and isinstance(data, dict):
                 for k, v in data.items():
                     if v is not None:
-                        config_str = config_str.replace(f"{{{{data.{k}}}}}", str(v))
+                        config_str = config_str.replace(f"{{{{data.{k}}}}}", str(v)).replace(f"{{{{{k}}}}}", str(v))
             widget_config = json.loads(config_str)
 
             action_payload = {
@@ -319,6 +330,7 @@ class RemoteContext:
                     "widgetId": widget_template_id,
                     "widgetConfig": widget_config,
                     "data": data or {},
+                    "target": target,
                     "styling": self.raw_context.get("styling", {}),
                     "userPreferences": self.raw_context.get("userPreferences", {})
                 }
@@ -331,18 +343,25 @@ class RemoteContext:
                     "widgetId": widget_template_id,
                     "widgetConfig": widget_config,
                     "data": data or {},
+                    "target": target,
                     "styling": self.raw_context.get("styling", {}),
                     "userPreferences": self.raw_context.get("userPreferences", {})
                 },
                 "status": "success",
-                "message": f"Widget '{widget_template_id}' queued."
+                "message": f"Widget '{widget_template_id}' queued (target: {target})."
             }
             return directive_response
         except Exception as e:
             raise RuntimeError(f"Failed to load widget '{widget_template_id}': {str(e)}")
 
-    def show_custom_ui(self, layout: dict, data: dict = None) -> dict:
-        """Registers an OPEN_AGENT_WIDGET client action directive with a generative layout."""
+    def show_custom_ui(self, layout: dict, data: dict = None, target: str = "inline") -> dict:
+        """Registers an OPEN_AGENT_WIDGET client action directive with a generative layout.
+        
+        Args:
+            layout: Generative Lego UI layout dictionary.
+            data: Optional data dictionary for widget state/interpolation.
+            target: Display location - 'inline' (default, in chat flow) or 'sidebar' (persistent side bar).
+        """
         if not getattr(self, "allow_generative_ui", True):
             raise PermissionError("Generative UI is disabled for this agent. Only predefined developer widgets are allowed.")
             
@@ -352,6 +371,7 @@ class RemoteContext:
                 "widgetId": "generative_custom_ui",
                 "widgetConfig": layout,
                 "data": data or {},
+                "target": target,
                 "styling": self.raw_context.get("styling", {}),
                 "userPreferences": self.raw_context.get("userPreferences", {})
             }
@@ -364,11 +384,76 @@ class RemoteContext:
                 "widgetId": "generative_custom_ui",
                 "widgetConfig": layout,
                 "data": data or {},
+                "target": target,
                 "styling": self.raw_context.get("styling", {}),
                 "userPreferences": self.raw_context.get("userPreferences", {})
             },
             "status": "success",
-            "message": "Custom UI layout queued."
+            "message": f"Custom UI layout queued (target: {target})."
+        }
+        return directive_response
+
+    def launch_app_mode(
+        self,
+        app_id: str,
+        canvas_widget: dict,
+        remote_widget: Optional[dict] = None,
+        title: Optional[str] = None,
+        icon: Optional[str] = None,
+        actions: Optional[List[dict]] = None
+    ) -> dict:
+        """Directs the client to enter App Mode with a full-screen canvas and optional companion remote control.
+        
+        Args:
+            app_id: Unique identifier for the application (e.g. 'flight_planner', 'tactical_console').
+            canvas_widget: Dictionary specifying the main full-screen canvas widget:
+                           {'widgetConfig': dict, 'data'?: dict, 'widgetId'?: str}.
+                           Can also be an IFrame layout ({'widgetConfig': {'type': 'iframe', 'src': '...'}}).
+            remote_widget: Optional dictionary specifying companion remote control for the sidebar dock:
+                           {'widgetConfig': dict, 'data'?: dict, 'widgetId'?: str}.
+                           If omitted, sidebar stays on standard workspace navigation and chat.
+            title: Optional title string to display in the client toolbar.
+            icon: Optional icon name from Icons catalog (e.g. 'Command', 'Sliders', 'Globe') or SVG.
+            actions: Optional list of toolbar action buttons:
+                     [{'id': 'save', 'label': 'Save', 'icon': 'Save', 'actionType': 'api_call', 'endpoint': '/api/...', 'showFeedback': True}]
+        """
+        app_config = {
+            "appId": app_id,
+            "canvasWidget": canvas_widget,
+        }
+        if remote_widget:
+            app_config["remoteWidget"] = remote_widget
+        if title:
+            app_config["title"] = title
+        if icon:
+            app_config["icon"] = icon
+        if actions:
+            app_config["actions"] = actions
+
+        action_payload = {
+            "type": "OPEN_AGENT_WIDGET",
+            "payload": {
+                "target": "app_mode",
+                "widgetId": app_id,
+                "title": title,
+                "icon": icon,
+                "actions": actions,
+                "appConfig": app_config,
+                "styling": self.raw_context.get("styling", {}),
+                "userPreferences": self.raw_context.get("userPreferences", {})
+            }
+        }
+        self.actions.append(action_payload)
+        directive_response = {
+            "directive": "execute_host_tool",
+            "target_tool": "openAgentWidget",
+            "parameters": {
+                "target": "app_mode",
+                "widgetId": app_id,
+                "appConfig": app_config
+            },
+            "status": "success",
+            "message": f"App Mode '{app_id}' launched (title: {title or app_id})."
         }
         return directive_response
 

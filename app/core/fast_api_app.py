@@ -110,6 +110,14 @@ def collect_feedback(feedback: Feedback) -> dict[str, str]:
     return {"status": "success"}
 
 
+@app.get("/api/a2a/v1/health", include_in_schema=False)
+@app.get("/healthz", include_in_schema=False)
+def health_check() -> dict[str, str]:
+    """Basic health check endpoint for container probes."""
+    return {"status": "healthy"}
+
+
+
 # Main execution
 if __name__ == "__main__":
     import uvicorn

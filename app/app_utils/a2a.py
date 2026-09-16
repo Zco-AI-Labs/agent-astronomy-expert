@@ -133,3 +133,21 @@ async def attach_a2a_routes(
         rpc_url=rpc_path,
         extended_agent_card_url=f"{rpc_path}{EXTENDED_AGENT_CARD_PATH}",
     )
+
+    # Register Vertex AI Reasoning Engine reverse-proxy gateway routes
+    gateway_card_routes = ["/api/a2a/v1/card", "/a2a/v1/card"]
+    for path in gateway_card_routes:
+        app.get(path, include_in_schema=False)(a2a_app._handle_get_agent_card)
+
+    gateway_rpc_routes = ["/api/a2a", "/a2a"]
+    for path in gateway_rpc_routes:
+        if path != rpc_path:
+            app.post(path, include_in_schema=False)(a2a_app._handle_requests)
+
+    if agent_card.supports_authenticated_extended_card:
+        gateway_ext_routes = ["/api/a2a/v1/card/extended", "/a2a/v1/card/extended"]
+        for path in gateway_ext_routes:
+            app.get(path, include_in_schema=False)(
+                a2a_app._handle_get_authenticated_extended_agent_card
+            )
+

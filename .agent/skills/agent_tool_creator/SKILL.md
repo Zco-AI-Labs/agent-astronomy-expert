@@ -67,19 +67,21 @@ Tools must read and write data through Firestore scopes to prevent cross-tenant 
 
 ### 2. Client Action Queuing (`context.actions`)
 Tools can request the host application UI to perform navigation, quick replies, rendering layouts, or call termination by appending action payloads to `context.actions`:
-* **`OPEN_AGENT_WIDGET`:** Queues rendering of dynamic dynamic widget configurations.
+* **`OPEN_AGENT_WIDGET`:** Queues rendering of dynamic widget configurations targeting Inline Chat, Persistent Side Bar, or App Mode.
 * **`SET_SUGGESTIONS`:** Sets list of prompt suggestions for the chat interface.
 * **`SWITCH_HUB`:** Navigates the user to a different hub workspace.
 * **`END_CALL`:** Terminates live voice call connections.
 
-### 3. Interface Mode Adaptation (Chat vs. Voice vs. SMS)
-Tools should check the active interface mode to format observations appropriately:
-* **Chat Mode:** Use `context.show_widget(widget_id)` to queue interactive UI widgets.
+### 3. Interface Mode & Spatial Target Adaptation (Chat vs. Side Bar vs. App Mode vs. Voice/SMS)
+Tools should choose the optimal visual target based on the complexity and persistence of the task:
+* **Inline Chat (`target="inline"`, Default):** Use `context.show_widget(widget_id, data, target="inline")` for short receipts, surveys, or one-off forms.
+* **Tactical Side Bar (`target="sidebar"`):** Use `context.show_widget(widget_id, data, target="sidebar")` or `context.show_custom_ui(layout, data, target="sidebar")` to dock a live dashboard, document, or task board in the 384px Side Bar dock where users can reference it while continuing to chat.
+* **Full-Screen App Mode (`launch_app_mode`):** Use `context.launch_app_mode(app_id, canvas_widget, remote_widget=None, title=None, icon=None, actions=None)` to promote the main viewport to a full-screen application canvas accompanied by a top toolbar and optional companion remote dock.
 * **Voice Mode:** Return concise, natural text responses optimized for text-to-speech, and avoid queuing complex UI cards. Use the `END_CALL` action directive if the conversation is concluded.
 * **SMS Mode:** Return brief, text-only summaries.
 
 > [!WARNING]
-> **Mandatory show_widget Call:** To display a widget card on the companion UI when a tool executes, the tool **must explicitly call** `tool_context.show_widget(widget_template_id, data)`. Simply returning `{"widget": "widget_name"}` or similar keys in the tool's output dictionary **will not** trigger widget rendering. The backend runtime requires the `show_widget` method call to append the visual action payload to the active session context's execution queue.
+> **Mandatory UI Helper Calls:** To display a widget card or launch App Mode when a tool executes, the tool **must explicitly call** `context.show_widget(...)`, `context.show_custom_ui(...)`, or `context.launch_app_mode(...)`. Simply returning `{"widget": "widget_name"}` or similar keys in the tool's output dictionary **will not** trigger client rendering. The backend runtime requires these method calls to append the visual action payload to the active session context's execution queue.
 
 
 ---
@@ -295,4 +297,142 @@ def generate_campaign_qr_code(campaign_url: str) -> dict:
         return {"status": "error", "message": str(e), "traceback": tb}
 ```
 
+### 4. Persistent Side Bar Dashboard Tool (`target="sidebar"`)
+Use this pattern when an agent opens a multi-step dashboard, document, or task board that should dock persistently in the 384px Side Bar while leaving an in-chat bookmark card:
+
+```python
+import logging
+import traceback
+import hubscape_adk
+
+logger = logging.getLogger(__name__)
+
+def open_project_board(project_id: str) -> dict:
+    """Opens the interactive project board in the user's persistent Side Bar console.
+
+    Args:
+        project_id: Unique identifier of the project workspace.
+    """
+    try:
+        context = hubscape_adk.get_context()
+        user_id = context.auth.get_user_id()
+        logger.info(f"User '{user_id}' requested side bar board for project '{project_id}'")
+
+        # 1. Fetch data from scoped database
+        tasks = context.list(scope="hub", collection_name=f"project_{project_id}_tasks")
+
+        # 2. Queue widget targeting the persistent Side Bar
+        context.show_widget(
+            widget_template_id="project_board_v1",
+            data={"project_id": project_id, "tasks": tasks},
+            target="sidebar"
+        )
+
+        return {
+            "status": "success",
+            "message": f"Project board for '{project_id}' opened in your Side Bar."
+        }
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"Failed to open project board: {e}\n{tb}")
+        return {"status": "error", "message": str(e), "traceback": tb}
+```
+
+### 5. Full-Screen App Mode Launch Tool (`launch_app_mode`)
+Use this pattern when an agent needs an expansive full-screen canvas stage, paired with an optional companion remote control in the Side Bar dock and top toolbar action buttons:
+
+```python
+import logging
+import traceback
+import hubscape_adk
+
+logger = logging.getLogger(__name__)
+
+def launch_mission_console(mission_id: str) -> dict:
+    """Launches the full-screen mission operations console in App Mode.
+
+    Args:
+        mission_id: Unique mission code to inspect.
+    """
+    try:
+        context = hubscape_adk.get_context()
+        user_id = context.auth.get_user_id()
+        logger.info(f"User '{user_id}' launching App Mode for mission '{mission_id}'")
+
+        # 1. Define full-screen canvas (IFrame web app or Lego container)
+        canvas_widget = {
+            "widgetConfig": {
+                "type": "iframe",
+                "src": f"/api/agents/{context.agent_id}/static/mission_map.html"
+            },
+            "data": {"missionId": mission_id}
+        }
+
+        # 2. Define optional companion remote controller for the Side Bar dock
+        # Supports both backend agent:// actions and zero-LLM app:// bridge actions
+        remote_widget = {
+            "widgetConfig": {
+                "type": "container",
+                "props": {"gap": "sm", "padding": "md"},
+                "children": [
+                    {"type": "text", "props": {"text": f"Mission {mission_id} Controls", "weight": "bold"}},
+                    # Zero-LLM action: updates shared state and chat with 0ms latency
+                    {
+                        "type": "button",
+                        "props": {
+                            "label": "Red Alert",
+                            "actionUrl": "app://set_alert?alert_level=RED&announcement=Condition+Red+declared!",
+                            "styling": {"colorTheme": "red"}
+                        }
+                    },
+                    # Backend action: invokes Python tool on agent
+                    {
+                        "type": "button",
+                        "props": {
+                            "label": "Deep Scan",
+                            "actionUrl": f"agent://{context.agent_id}/scan_sector",
+                            "styling": {"colorTheme": "indigo"}
+                        }
+                    }
+                ]
+            }
+        }
+
+        # 3. Define top toolbar action buttons
+        actions = [
+            {
+                "id": "save_telemetry",
+                "label": "Save Log",
+                "icon": "Save",
+                "actionType": "api_call",
+                "endpoint": f"/api/plugins/{context.agent_id}/save_log",
+                "showFeedback": True,
+                "successLabel": "Saved!"
+            },
+            {
+                "id": "toggle_radar",
+                "label": "Radar Sweep",
+                "icon": "Radio",
+                "actionType": "bridge"
+            }
+        ]
+
+        # 4. Direct client runtime to enter App Mode
+        context.launch_app_mode(
+            app_id=f"mission_{mission_id}",
+            canvas_widget=canvas_widget,
+            remote_widget=remote_widget,
+            title=f"Mission {mission_id}",
+            icon="Command",
+            actions=actions
+        )
+
+        return {
+            "status": "success",
+            "message": f"Mission console '{mission_id}' launched into App Mode."
+        }
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"Failed to launch mission console: {e}\n{tb}")
+        return {"status": "error", "message": str(e), "traceback": tb}
 ```

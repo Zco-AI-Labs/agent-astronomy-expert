@@ -484,7 +484,12 @@ class AgentEngineA2aExecutor(A2aAgentExecutor):
                             "widgetConfig": payload.get("widgetConfig"),
                             "data": payload.get("data") or {},
                             "styling": payload.get("styling") or {},
-                            "userPreferences": payload.get("userPreferences") or {}
+                            "userPreferences": payload.get("userPreferences") or {},
+                            "target": payload.get("target") or "inline",
+                            "appConfig": payload.get("appConfig"),
+                            "title": payload.get("title"),
+                            "icon": payload.get("icon"),
+                            "actions": payload.get("actions"),
                         },
                         "message": interceptor.accumulated_text or "Displaying agent widget."
                     }

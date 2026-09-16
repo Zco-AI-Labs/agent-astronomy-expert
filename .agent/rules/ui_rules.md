@@ -28,8 +28,23 @@ When referencing dynamic data (such as image URLs, text variables, or button act
   * **Incorrect:** `http://localhost:8090/api/plugins/my_agent/my_widget.html`
 
 ## 3. Mandatory Widget Schema Validation Step
-* **Rule:** Prior to implementing or modifying any widget JSON files under `app/ui/widgets/` (or `widgets/`), the agent MUST explicitly validate the proposed schema against the official [Lego Widgets & IFrames Guide](file:///Users/rajvekeria/Documents/GitHub/hubscape-agent-template/docs/Hubscape-Agent-Template-Guide/CHAPTER_6_LEGO_WIDGETS_AND_IFRAMES.md).
+* **Rule:** Prior to implementing or modifying any widget JSON files under `app/ui/widgets/` (or `widgets/`), the agent MUST explicitly validate the proposed schema against the official [Lego Widgets & IFrames Guide](file://docs/Hubscape-ADK-Manual/CHAPTER_6_LEGO_WIDGETS_AND_IFRAMES.md) and [UI Elements Catalog](file://docs/UI_ELEMENTS.md).
 * **Validation Checklist:**
   1. Verify every component type is in the registry (e.g. no `card`, `title`, `text-input`, `dropdown`, or `metadata-grid`).
   2. Confirm inputs and dropdowns use `"name"` (not `"id"`) for payload keys.
   3. Ensure buttons and inputs use standard styling configurations (Tailwind classes in `"className"` or standard props) rather than custom properties like `"variant"`.
+
+## 4. UI Target Placement & App Mode Standards
+* **Target Destination Mandate:** Every UI widget invocation must deliberately choose its spatial destination based on workflow requirements:
+  * `target="inline"`: Use for short receipts, surveys, one-off approval gates, and compact forms.
+  * `target="sidebar"`: Use for live dashboards, order summaries, task boards, audio/video players, and long-form editors that the user needs to continuously reference while chatting.
+  * `target="app_mode"` / `launch_app_mode(...)`: Use when the workflow requires an expansive, full-screen canvas stage (maps, complex visualizers, or dedicated web apps).
+* **App Mode Dual-Widget Rules:**
+  * `canvas_widget` is **mandatory**; must be a valid Lego UI layout dict or an iframe specification.
+  * `remote_widget` is **optional**. Do NOT supply an empty or dummy remote widget; omit it if the app does not have companion controls so the Side Bar stays on standard workspace tools.
+* **App Toolbar Security Guard:**
+  * Toolbar actions using `actionType: 'api_call'` **MUST** use relative endpoints starting with `/api/` (e.g. `/api/plugins/{{agent_id}}/save`). Full external URLs (`https://...`) are strictly prohibited to prevent credential leakage.
+  * Set `showFeedback: true` only on buttons triggering asynchronous backend mutations.
+* **Iframe Bridge Protocol:**
+  * External iframes embedded in App Mode must communicate using standard `HUBSCAPE_APP_BRIDGE` message events.
+  * Never hardcode external ports or absolute origins in iframe `src`. Always use relative paths with `{{agent_id}}`.

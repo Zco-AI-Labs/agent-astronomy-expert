@@ -88,4 +88,13 @@ The containerized FastAPI application is built using the root `[Dockerfile](../.
 
 ---
 
+## 6. Container Health Probes (`/healthz`, `/api/a2a/v1/health`)
+
+For container orchestrators (such as Google Cloud Run, Kubernetes, or Docker health checks), `fast_api_app.py` exposes lightweight liveness and readiness probe routes that return `{"status": "healthy"}` without invoking model inference:
+
+* `GET /healthz`: Standard Kubernetes/Cloud Run container liveness probe.
+* `GET /api/a2a/v1/health`: A2A gateway health probe endpoint.
+
+---
+
 [Next Chapter: Agent Evaluation & Diagnostics Suite](CHAPTER_12_EVALUATION_AND_DIAGNOSTICS.md) | [Previous Chapter: GEAP Platform Manual](CHAPTER_10_GEAP_PLATFORM_MANUAL.md)

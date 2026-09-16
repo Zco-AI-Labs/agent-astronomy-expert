@@ -15,16 +15,22 @@ Lego widgets are JSON files representing a tree of nested components. They must 
 
 ---
 
-## 2. The Atomic Viewport Model & Widget Lifecycle
+## 2. The Tri-Target Viewport Architecture
 
-The Hubscape UI operates under the **Atomic Viewport Model** for all interactive widgets and forms:
+The Hubscape client provides three dedicated spatial destinations for UI widgets:
 
-### 1. The Single Active Widget Principle
-> [!IMPORTANT]
-> **Only ONE interactive widget or form can be active in the viewport at a time.**
-> When an agent calls `context.show_widget()` (or returns a UI payload from a tool), the newly emitted widget mounts as the singular active interactive component in the viewport. When designing agent workflows, guide users through focused, sequential steps rather than expecting concurrent multi-form interactions.
+### 1. The Three Placement Targets
 
-### 2. Viewport Lifecycle & Dismissal Options
+| Target | Viewport Location | Interaction Model | Primary Use Cases |
+|---|---|---|---|
+| **Inline Chat** (`target="inline"`) | Embedded directly in conversation timeline | Scrolls with messages; converts to receipt on submission | Fast data capture, receipts, surveys, confirmation dialogs |
+| **Tactical Side Bar** (`target="sidebar"`) | Pinned 384px (`w-96`) dock on desktop; drawer on mobile | Persistent tab in top carousel; interactive bookmark card in chat | Live dashboards, audio/video players, task boards, editors |
+| **Full-Screen App Mode** (`target="app_mode"`) | Promotes main viewport to full-screen canvas | Top toolbar + canvas + companion remote in Side Bar + companion chat | Interactive maps, full editors, data visualizers, iframe web apps |
+
+> [!NOTE]
+> **Inline Chat Form Lifecycle:** Inside inline chat, widgets follow the **Atomic Viewport Model** where one form is submitted or completed sequentially before the conversation moves forward. In the Side Bar and App Mode, widgets remain persistently active while the user continues chatting.
+
+### 2. Viewport Lifecycle & Dismissal Options (Inline Chat)
 Widgets support two core submission lifecycle paradigms, alongside instant client-side cancellation and server-driven closure:
 
 | Lifecycle Mode | Trigger | Viewport Behavior | Confirmation / Message Display |
@@ -122,6 +128,29 @@ This appends the `CLOSE_AGENT_WIDGET` action directive to the response payload:
 
 ---
 
+## 3.1 Zero-LLM Local Bridge Routing (`app://<action_name>`)
+
+When building App Mode companion remotes or interactive Lego widgets, buttons can dispatch actions with **0ms latency and 0 LLM cost** using the `app://` protocol:
+
+* **Format:** `app://<action_name>?<key>=<value>&announcement=<text>`
+* **Instant Client-Side Dispatch:** Handled entirely by the client-side `useAppBridge` event bus. Updates shared application state across both the canvas stage and companion remote without invoking an agent LLM turn.
+* **Automatic State Parsing:** All query parameters (e.g. `?shields=100&warp=9`) are parsed into strings, numbers, or booleans and merged into the shared application store, instantly triggering reactive re-renders in Lego containers and IFrames.
+* **Chat Timeline Announcements:** Passing `?announcement=Operation+complete` posts a formatted assistant status message to the companion chat history without triggering an LLM generation. (To suppress announcements, pass `?silent=true`).
+* **Domain State & Custom Banners:** Arbitrary state parameters passed via `app://` (such as `?status=active&mode=turbo`) update the shared state store instantly. Agents can render dynamic status indicators, alert banners, and telemetry gauges directly within their Lego widget trees that reactively re-render when these state keys update.
+
+```json
+{
+  "type": "button",
+  "props": {
+    "label": "High Priority",
+    "actionUrl": "app://set_priority?priority=high&announcement=Priority+updated+to+high.",
+    "styling": { "colorTheme": "amber" }
+  }
+}
+```
+
+---
+
 ## 4. Visual Sandboxed IFrames (`iframe`)
 
 For complex UIs requiring canvas interactions, dragging, or real-time editing, use the `iframe` Lego component to embed custom HTML files:
@@ -140,43 +169,87 @@ For complex UIs requiring canvas interactions, dragging, or real-time editing, u
 
 ---
 
-## 5. Bidirectional IFrame Communication
+## 5. Bidirectional IFrame Communication & Reactive App Bridge
 
-Because GEAP/ADK agent containers are sandboxed, iframes cannot directly send HTTP requests (`fetch` or `Axios`) to custom agent API routes. Instead, they communicate using standard HTML5 browser messages:
+Because GEAP/ADK agent containers are sandboxed, iframes communicate with the parent Hubscape web client using standard HTML5 `window.parent.postMessage()` APIs.
 
 ```text
-  Custom HTML (IFrame)                 Hubscape Chat UI                     Agent Container
-------------------------               ----------------                     ---------------
-window.parent.postMessage()  ----->    Intercepts Submit       ----->       Executes Python Tool
-                                       Sends HTTP POST                      (e.g., generate_qr)
-IFrame Message Listener      <-----    Returns tool response   <-----       Returns JSON Dict
+  Custom HTML (IFrame)                 Hubscape Client / Bridge                 Agent / Subsystems
+------------------------               ------------------------                 ------------------
+window.parent.postMessage()  ----->    Message Broker Relay         ----->      Executes Python Tool or
+                                       (Security & Token Scoping)               Updates Companion Remote
+IFrame Message Listener      <-----    Relays Parent Events         <-----      Toolbar Actions / State
 ```
 
-### 1. Sending an Action from inside the IFrame
-When the user clicks a button inside your HTML page, post a message containing the tool name and payload arguments to the parent window:
-```javascript
-// Extract dynamic agent ID from window pathname
-const pathParts = window.location.pathname.split('/');
-const agentId = ((pathParts[2] === 'plugins' || pathParts[2] === 'agents') && pathParts[3]) ? pathParts[3] : 'my_agent';
+### 1. Inbound Actions from the IFrame
 
+Web applications running inside iframes can dispatch three primary message types to the parent window:
+
+#### A. Backend Tool Execution (`SUBMIT_FORM`)
+Triggers an agent tool execution without reloading the page:
+```javascript
 window.parent.postMessage({
   type: 'SUBMIT_FORM',
   actionUrl: `agent://${agentId}/my_backend_tool`,
-  payload: { param1: 'value1' }
+  payload: { flight_id: 'UA101', altitude: 32000 }
 }, '*');
 ```
 
-### 2. Processing the Response
-The parent Hubscape container captures this request, executes the corresponding Python tool script (e.g., `app/scripts/my_backend_tool.py`), and posts the tool's JSON output back to the iframe. Listen for this response in your HTML JavaScript:
+#### B. Direct Chat Timeline Broadcast (`POST_CHAT`)
+Publishes an event or announcement directly into the user's active conversation history. The platform locks attribution to the app's title and `subsystem: 'app_event'` to prevent identity spoofing:
+```javascript
+window.parent.postMessage({
+  type: 'HUBSCAPE_APP_BRIDGE',
+  action: 'POST_CHAT',
+  payload: {
+    text: '🚨 Waypoint deviation detected: Route updated to NAV-4.',
+    senderName: 'Flight Radar'
+  }
+}, '*');
+```
+
+#### C. Inter-Widget State Synchronization (`UPDATE_STATE` & `BROADCAST`)
+Synchronizes state in real time with a companion remote widget docked in the Side Bar:
+```javascript
+// Synchronize shared data store with companion remote widget
+window.parent.postMessage({
+  type: 'HUBSCAPE_APP_BRIDGE',
+  action: 'UPDATE_STATE',
+  payload: { zoom: 12, layer: 'satellite' }
+}, '*');
+
+// Broadcast custom named event across the bridge
+window.parent.postMessage({
+  type: 'HUBSCAPE_APP_BRIDGE',
+  action: 'BROADCAST',
+  eventType: 'RADAR_SWEEP_COMPLETE',
+  payload: { targetsFound: 4 }
+}, '*');
+```
+
+### 2. Outbound Events from Hubscape to the IFrame
+When the user triggers a toolbar action button or interacts with a companion remote widget in the Side Bar dock, the parent platform broadcasts a `HUBSCAPE_APP_BRIDGE` event into all active iframes:
+
 ```javascript
 window.addEventListener('message', (event) => {
   const data = event.data;
-  if (data && data.type === 'TOOL_RESPONSE') {
-    console.log("Received data from Python script:", data.payload);
-    // Update HTML DOM visually
+  if (data && data.type === 'HUBSCAPE_APP_BRIDGE') {
+    const { type, payload } = data.detail;
+    if (type === 'TOOLBAR_ACTION') {
+      console.log("Toolbar action clicked:", payload.id);
+    } else if (type === 'STATE_UPDATE') {
+      console.log("Companion remote updated state:", payload);
+    }
+  } else if (data && data.type === 'TOOL_RESPONSE') {
+    console.log("Received backend tool response:", data.payload);
   }
 });
 ```
+
+### 3. Security Token Scoping & Context Injection
+The platform inspects iframe `src` URLs to enforce strict domain boundaries:
+* **Internal/Relative URLs (`/api/...`, same-origin):** The client injects query parameters `?authToken=...&hubId=...&orgId=...` and passes them via `data-auth-token`.
+* **External Third-Party URLs (`https://...`):** Sensitive platform `authToken` values are strictly **withheld**. Only sanitized context identifiers (`hubId`, `orgId`) are provided.
 
 ---
 

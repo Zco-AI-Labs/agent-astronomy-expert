@@ -4,12 +4,17 @@ The `RemoteContext` object (retrieved via `get_context()` inside a tool script) 
 
 ---
 
-## 1. Authentication Details (`context.auth`)
+## 1. Authentication & Session Details (`context.auth`, `context.session_metadata`)
 
 Retrieve user and organizational scopes from `context.auth`:
 * `context.auth.get_user_id()`: Returns the unique UUID of the active user.
 * `context.auth.org_id`: The organization UUID (always populated).
 * `context.auth.hub_id`: The active Hub UUID (may be `None` if org-scoped).
+
+### Session Metadata & Privileges:
+* `context.session_metadata`: Returns a dictionary of active session metadata parameters passed into the execution turn.
+* `context.user_privileges`: Returns the list of RBAC role privileges assigned to the user.
+* `context.base_url`, `context.api_url`, `context.agent_url`: Platform routing base URLs.
 
 ---
 
@@ -139,6 +144,19 @@ def my_custom_paid_tool(param: str) -> dict:
 
     return result
 ```
+
+---
+
+## 7. UI & Viewport Directives (`show_widget`, `launch_app_mode`, `close_widget`)
+
+`RemoteContext` provides built-in methods for queuing client-side UI action directives that render across the platform's tri-target viewport system (`inline`, `sidebar`, `app_mode`):
+
+* `context.show_widget(widget_template_id: str, data: dict = None, target: str = "inline")`: Loads a declarative JSON widget from `app/ui/widgets/` and queues an `OPEN_AGENT_WIDGET` client directive. Set `target="sidebar"` to pin the widget in the companion Side Bar dock.
+* `context.show_custom_ui(layout: dict, data: dict = None, target: str = "inline")`: Queues a generative Lego UI layout dictionary.
+* `context.launch_app_mode(app_id: str, canvas_widget: dict, remote_widget: Optional[dict] = None, title: Optional[str] = None, icon: Optional[str] = None, actions: Optional[List[dict]] = None)`: Promotes the client to a full-screen interactive App Mode canvas with an optional companion remote control in the sidebar.
+* `context.close_widget(result_text: Optional[str] = None)`: Appends a `CLOSE_AGENT_WIDGET` directive to programmatically dismiss or unmount the active widget.
+
+*(For detailed element specifications and interactive button lifecycle behaviors, see [Chapter 6: Lego Widgets & Sandboxed IFrames](CHAPTER_6_LEGO_WIDGETS_AND_IFRAMES.md)).*
 
 ---
 

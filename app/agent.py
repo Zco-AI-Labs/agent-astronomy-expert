@@ -24,10 +24,6 @@ from app.core.system_tools import (
     consultAgent,
     discover_agents,
 )
-from app.scripts.get_stargazing_forecast import get_stargazing_forecast
-from app.scripts.get_celestial_body_position import get_celestial_body_position
-from app.scripts.get_astronomical_events import get_astronomical_events
-from app.scripts.manage_stargazer_profile import manage_stargazer_profile
 
 # 1. Require SKILL.md as the Single Source of Truth for metadata (name, description) and instructions
 runtime_dir = os.path.dirname(os.path.abspath(__file__))
@@ -166,7 +162,7 @@ if allow_web_search or allow_google_maps:
 from app.app_utils.vertex_gemini import get_model
 
 root_agent = AdkAgent(
-    model=get_model("gemini-2.5-flash"),
+    model=get_model("gemini-3.5-flash"),
     name=agent_name,
     description=agent_description,
     instruction=system_instruction,

@@ -86,8 +86,11 @@ Always prefer using the high-level Firestore scope CRUD helpers:
 
 
 ## 🎨 Generative UI & Dynamic Widgets
-* **Predefined Widget Templates:** Loaded from the agent's `widgets/` folder using `await context.show_widget(widget_template_id, data)`.
-* **Generative Custom UIs:** Built dynamically on the fly using `await context.show_custom_ui(layout, data)`.
+* **The 3 Display Targets:**
+  * **Inline Chat (`target="inline"`, Default):** `context.show_widget(widget_id, data, target="inline")` or `context.show_custom_ui(layout, data, target="inline")`. In-flow conversation cards, surveys, or receipts.
+  * **Tactical Side Bar (`target="sidebar"`):** `context.show_widget(widget_id, data, target="sidebar")` or `context.show_custom_ui(layout, data, target="sidebar")`. Pinned into the 384px right dock with recent tabs carousel and in-chat bookmark card.
+  * **Full-Screen App Mode (`context.launch_app_mode`):** `context.launch_app_mode(app_id, canvas_widget, remote_widget=None, title=None, icon=None, actions=None)`. Expands the main viewport into a full application canvas, paired with an optional companion remote in the Side Bar dock and top toolbar action buttons.
+* **Server-Driven Widget Closure:** Use `context.close_widget(result_text="Operation finished.")` inside Python tools to programmatically unmount an active widget card and render completion text.
 * **Standard Response Wrapper:** Wrap response payloads from action callback endpoints using `make_widget_response(context)` to prevent browser exceptions.
 * **IFrame Placeholders:** Always use `/api/agents/{{agent_id}}/static/...` for iframe source paths and `/api/plugins/{{agent_id}}/` for API endpoints inside layouts.
 
