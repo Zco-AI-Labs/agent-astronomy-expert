@@ -13,16 +13,24 @@
         {
           "type": "text",
           "props": {
-            "text": "🔭 Stargazer Profile",
+            "text": "\ud83d\udd2d Stargazer Profile",
             "className": "text-base font-bold text-emerald-300"
           }
         },
         {
-          "type": "text",
+          "type": "container",
           "props": {
-            "text": "Saved",
-            "className": "text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300"
-          }
+            "colorProfile": "brand-2",
+            "className": "text-xs font-semibold px-2.5 py-0.5 rounded-full shadow-sm"
+          },
+          "children": [
+            {
+              "type": "text",
+              "props": {
+                "text": "Saved"
+              }
+            }
+          ]
         }
       ]
     },
@@ -35,38 +43,65 @@
         {
           "type": "text",
           "props": {
-            "text": "📍 Location: {{data.city_name}} ({{data.latitude}}°, {{data.longitude}}°)",
+            "text": "\ud83d\udccd Location: {{data.city_name}} ({{data.latitude}}\u00b0, {{data.longitude}}\u00b0)",
             "className": "font-medium"
           }
         },
         {
           "type": "text",
           "props": {
-            "text": "🔍 Observing Gear: {{data.optics_tier_label}}",
+            "text": "\ud83d\udd0d Observing Gear: {{data.optics_tier_label}}",
             "className": "font-medium"
           }
         },
         {
           "type": "text",
           "props": {
-            "text": "🌌 Dark-Sky Rating: {{data.dark_sky_desc}}",
+            "text": "\ud83c\udf0c Dark-Sky Rating: {{data.dark_sky_desc}}",
             "className": "text-slate-400"
           }
         }
       ]
     },
     {
-      "type": "button",
+      "type": "container",
       "props": {
-        "label": "Update Location",
-        "actionUrl": "agent://{{agent_id}}/manage_stargazer_profile?action=set",
-        "styling": {
-          "colorTheme": "emerald"
+        "className": "flex items-center gap-2 pt-2 border-t border-slate-800/80"
+      },
+      "children": [
+        {
+          "type": "button",
+          "props": {
+            "label": "Update Location",
+            "actionUrl": "agent://{{agent_id}}/manage_stargazer_profile?action=set",
+            "colorProfile": "brand-1",
+            "closeOnClick": false,
+            "submittedLabel": "Settings Opened",
+            "className": "flex-1 py-1.5 px-2.5 text-xs font-semibold rounded-lg transition-all"
+          }
         },
-        "closeOnClick": false,
-        "submittedLabel": "Settings Opened",
-        "className": "w-full py-1.5 text-xs font-semibold rounded bg-emerald-700 hover:bg-emerald-600 text-white transition-colors"
-      }
+        {
+          "type": "button",
+          "props": {
+            "label": "Sky Forecast",
+            "actionUrl": "agent://{{agent_id}}/get_stargazing_forecast",
+            "colorProfile": "brand-2",
+            "closeOnClick": false,
+            "className": "flex-1 py-1.5 px-2.5 text-xs font-semibold rounded-lg transition-all"
+          }
+        },
+        {
+          "type": "button",
+          "props": {
+            "label": "Close",
+            "actionUrl": "client://close_widget",
+            "colorProfile": "canvas",
+            "closeOnClick": true,
+            "submittedLabel": "Dismissed",
+            "className": "py-1.5 px-2.5 text-xs font-semibold rounded-lg transition-all"
+          }
+        }
+      ]
     }
   ]
 }

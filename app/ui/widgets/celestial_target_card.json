@@ -13,16 +13,24 @@
         {
           "type": "text",
           "props": {
-            "text": "🪐 {{data.target_name}}",
+            "text": "\ud83e\ude90 {{data.target_name}}",
             "className": "text-base font-bold text-violet-300"
           }
         },
         {
-          "type": "text",
+          "type": "container",
           "props": {
-            "text": "{{data.visibility_status}}",
-            "className": "text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/30"
-          }
+            "colorProfile": "brand-2",
+            "className": "text-xs font-semibold px-2.5 py-0.5 rounded-full shadow-sm"
+          },
+          "children": [
+            {
+              "type": "text",
+              "props": {
+                "text": "{{data.visibility_status}}"
+              }
+            }
+          ]
         }
       ]
     },
@@ -48,7 +56,7 @@
             {
               "type": "text",
               "props": {
-                "text": "{{data.cardinal_direction}} ({{data.azimuth_degrees}}°)",
+                "text": "{{data.cardinal_direction}} ({{data.azimuth_degrees}}\u00b0)",
                 "className": "text-sm font-semibold text-slate-100"
               }
             }
@@ -70,7 +78,7 @@
             {
               "type": "text",
               "props": {
-                "text": "{{data.altitude_degrees}}° Above Horizon",
+                "text": "{{data.altitude_degrees}}\u00b0 Above Horizon",
                 "className": "text-sm font-semibold text-slate-100"
               }
             }
@@ -101,14 +109,33 @@
       ]
     },
     {
-      "type": "button",
+      "type": "container",
       "props": {
-        "label": "Close",
-        "actionUrl": "client://close_widget",
-        "closeOnClick": true,
-        "submittedLabel": "Dismissed",
-        "className": "w-full py-1.5 text-xs font-semibold rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-      }
+        "className": "flex items-center gap-2 pt-1"
+      },
+      "children": [
+        {
+          "type": "button",
+          "props": {
+            "label": "Tonight's Forecast",
+            "actionUrl": "agent://{{agent_id}}/get_stargazing_forecast",
+            "colorProfile": "brand-1",
+            "closeOnClick": false,
+            "className": "flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg shadow-sm transition-all"
+          }
+        },
+        {
+          "type": "button",
+          "props": {
+            "label": "Close",
+            "actionUrl": "client://close_widget",
+            "colorProfile": "canvas",
+            "closeOnClick": true,
+            "submittedLabel": "Dismissed",
+            "className": "py-1.5 px-3 text-xs font-semibold rounded-lg transition-all"
+          }
+        }
+      ]
     }
   ]
 }

@@ -19,7 +19,7 @@
             {
               "type": "text",
               "props": {
-                "text": "✨ Tonight's Night Sky Forecast",
+                "text": "\u2728 Tonight's Night Sky Forecast",
                 "className": "text-base font-bold text-indigo-300"
               }
             }
@@ -37,13 +37,13 @@
     {
       "type": "container",
       "props": {
-        "className": "flex items-center justify-between p-3.5 bg-indigo-950/40 rounded-xl border border-indigo-500/20"
+        "className": "flex items-center justify-between p-3.5 bg-slate-800/40 rounded-xl border border-slate-700/40"
       },
       "children": [
         {
           "type": "container",
           "props": {
-            "className": "flex flex-col"
+            "className": "flex flex-col gap-0.5"
           },
           "children": [
             {
@@ -56,18 +56,41 @@
             {
               "type": "text",
               "props": {
-                "text": "{{data.stargazing_rating}} ({{data.stargazing_score}}/100)",
-                "className": "text-lg font-bold text-emerald-400"
+                "text": "{{data.stargazing_rating}}",
+                "className": "text-lg font-bold text-slate-100"
               }
             }
           ]
         },
         {
-          "type": "text",
+          "type": "container",
           "props": {
-            "text": "☁️ {{data.cloud_cover}}% Clouds",
-            "className": "text-xs font-semibold px-2.5 py-1 bg-slate-800 rounded-full text-slate-300"
-          }
+            "className": "flex items-center gap-2"
+          },
+          "children": [
+            {
+              "type": "container",
+              "props": {
+                "colorProfile": "brand-2",
+                "className": "text-xs font-bold px-2.5 py-1 rounded-full shadow-sm"
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "props": {
+                    "text": "{{data.stargazing_score}}/100"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "props": {
+                "text": "\u2601\ufe0f {{data.cloud_cover}}%",
+                "className": "text-xs font-semibold px-2 py-1 bg-slate-800 rounded-full text-slate-300"
+              }
+            }
+          ]
         }
       ]
     },
@@ -86,7 +109,7 @@
             {
               "type": "text",
               "props": {
-                "text": "🌙 Moon Phase",
+                "text": "\ud83c\udf19 Moon Phase",
                 "className": "text-xs text-slate-400"
               }
             },
@@ -115,7 +138,7 @@
             {
               "type": "text",
               "props": {
-                "text": "🔭 Prime Window",
+                "text": "\ud83d\udd2d Prime Window",
                 "className": "text-xs text-slate-400"
               }
             },
@@ -158,7 +181,35 @@
           }
         }
       ]
+    },
+    {
+      "type": "container",
+      "props": {
+        "className": "flex items-center gap-2 pt-2 border-t border-slate-800/80"
+      },
+      "children": [
+        {
+          "type": "button",
+          "props": {
+            "label": "Stargazer Profile",
+            "actionUrl": "agent://{{agent_id}}/manage_stargazer_profile?action=view",
+            "colorProfile": "brand-1",
+            "closeOnClick": false,
+            "className": "flex-1 py-2 px-3 text-xs font-semibold rounded-lg shadow-sm transition-all"
+          }
+        },
+        {
+          "type": "button",
+          "props": {
+            "label": "Close",
+            "actionUrl": "client://close_widget",
+            "colorProfile": "canvas",
+            "closeOnClick": true,
+            "submittedLabel": "Dismissed",
+            "className": "py-2 px-4 text-xs font-semibold rounded-lg transition-all"
+          }
+        }
+      ]
     }
   ]
 }
-
