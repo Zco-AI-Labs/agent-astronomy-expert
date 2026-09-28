@@ -569,27 +569,56 @@ Renders vertical progress indicators, circular dials, or infinite spinners.
 ---
 
 ## 🖥️ 15. Sandboxed IFrame (`iframe`)
-An escape hatch to load custom, interactive HTML pages. Enables support for custom canvases, drawing pads, interactive charts, and external widget scripts.
+An escape hatch to load custom, interactive HTML pages. Enables support for custom canvases, drawing pads, interactive charts, dynamic suggestion menus, and full-screen web applications.
 
 ### Props:
 * `src` (string): Path to your static files (e.g. `/api/agents/{{agent_id}}/static/widget.html`).
-* `height` (string): Container height (e.g., `"350px"`).
-* `className` (string): Styling overrides.
+  * **Query Parameters for Tiny Primitives:** You may append small scalar values (e.g. `?theme=dark&mode=compact`).
+  * **⚠️ Never pass large arrays/objects via query params:** Query strings will overflow and `{{data.key}}` dot notation will fail regex matching. Pass rich datasets through the Python `data` parameter and receive them via `postMessage`.
+* `height` (string): Container height (e.g., `"350px"` or `"100%"`).
+* `className` (string): Styling overrides (Tailwind classes).
 
 ### Communication (Bidirectional `postMessage`):
-* **Submit data from inside the IFrame:**
-  ```javascript
-  // Extract dynamic agent ID from window pathname to construct the correct endpoint
-  const pathParts = window.location.pathname.split('/');
-  const agentId = ((pathParts[2] === 'plugins' || pathParts[2] === 'agents') && pathParts[3]) ? pathParts[3] : 'my_agent';
 
-  window.parent.postMessage({
-    type: 'SUBMIT_FORM',
-    actionUrl: `/api/plugins/${agentId}/submit_data`,
-    payload: { signature_path: '...' }
-  }, '*');
-  ```
-* The host will perform the HTTP POST to your agent's API endpoint and send the backend's response back to your iframe page so you can trigger success animations.
+#### 1. Inbound (Receiving Dynamic Data from Python Agent):
+```javascript
+window.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || typeof data !== 'object') return;
+
+  // Handle data updates pushed from agent tools or platform
+  if (data.type === 'SET_DATA' || data.type === 'SET_SUGGESTIONS' || data.type === 'TOOL_RESPONSE') {
+    const payload = data.payload || data.data || data;
+    console.log("Inbound payload received:", payload);
+    populateUI(payload);
+  }
+});
+```
+
+#### 2. Outbound (Submit Data or Trigger Agent Tools):
+```javascript
+// Extract dynamic agent ID from window pathname or query parameters
+const pathParts = window.location.pathname.split('/');
+const agentId = ((pathParts[2] === 'plugins' || pathParts[2] === 'agents') && pathParts[3]) ? pathParts[3] : 'my_agent';
+
+window.parent.postMessage({
+  type: 'SUBMIT_FORM',
+  actionUrl: `agent://${agentId}/submit_data`,
+  payload: { selected_id: 104, query: 'sensor_data' }
+}, '*');
+```
+
+#### 3. Outbound (Direct Chat Timeline Broadcast):
+```javascript
+window.parent.postMessage({
+  type: 'HUBSCAPE_APP_BRIDGE',
+  action: 'POST_CHAT',
+  payload: {
+    text: 'User selected Subsystem: Propulsion Array',
+    senderName: 'Tactical Console'
+  }
+}, '*');
+```
 
 ### Example JSON:
 ```json
@@ -813,3 +842,48 @@ For multiline input fields, the linter and engine support the type `"textarea"`.
 ### Behavior:
 * **Automatic Mapping**: The layout engine automatically normalizes `"type": "textarea"` elements into `"type": "input"` with multiline layout support.
 * **Compatibility**: Props and data serialization follow the standard `input` element spec.
+
+---
+
+## 🎨 26. Color Picker (`color-picker`)
+An interactive drop-down color selector with real-time synchronized inputs, canvas color wheel, brightness adjustment, preset swatches, and a confirmation lifecycle.
+
+### Display & Interaction Lifecycle:
+* **Drop-Down Shell**: Displays a sleek trigger button showing the currently active color swatch, formatted color code, and a collapsible chevron.
+* **Anchored Popover**: Clicking the trigger opens an anchored floating popover with:
+  * **Interactive Color Disc**: HTML5 canvas radial color wheel with draggable reticle.
+  * **Brightness Slider**: Smooth linear gradient brightness track.
+  * **Synchronized Inputs**: Bidirectionally synchronized **HEX** text input and **RGB** numeric inputs (`r`, `g`, `b`). Modifying any input or moving the wheel reticle immediately synchronizes the alternative inputs in real time.
+  * **Quick Preset Swatches**: Grid of clickable preset color buttons with active selection indicator checkmarks.
+  * **Visual Comparison Swatches**: Live side-by-side preview (`[Current] → [New]`) matching preset dimensions.
+  * **Select Button**: Confirms the draft color, commits it to the form context and trigger button, and closes the popover.
+  * **Cancel Button**: Discards draft adjustments, reverts back to the previously selected color without touching form state, and closes the popover (also triggered on `Escape` or clicking outside).
+
+### Props:
+* `name` (string): **REQUIRED.** The payload key submitted in the action payload.
+* `label` (string, optional): Label text displayed above the control.
+* `defaultValue` / `default_value` (string, optional): Initial color code (Hex or RGB). Defaults to `"#3B82F6"`. Also supports dynamic hydration from agent data when field name matches `data[name]`.
+* `format` (string, optional): Output submission format. Supports `"hex"` (`#RRGGBB`) or `"rgb"` (`rgb(r, g, b)`). Defaults to `"hex"`.
+* `presetColors` / `presets` (array of strings, optional): Custom list of hex color strings displayed as quick preset buttons. If omitted, defaults to the curated 12-color Hubscape palette.
+* `required` (boolean | string, optional): Enforces non-empty form field validation.
+* `disabled` (boolean, optional): Disables interaction and renders read-only appearance.
+* `className` (string, optional): Additional Tailwind CSS utility classes.
+
+### Example JSON:
+```json
+{
+  "type": "color-picker",
+  "props": {
+    "name": "brand_color",
+    "label": "Brand Accent Color",
+    "defaultValue": "#10B981",
+    "format": "hex",
+    "presetColors": [
+      "#EF4444", "#F97316", "#F59E0B", "#10B981",
+      "#06B6D4", "#3B82F6", "#6366F1", "#8B5CF6",
+      "#EC4899", "#0F172A", "#64748B", "#FFFFFF"
+    ],
+    "required": true
+  }
+}
+```

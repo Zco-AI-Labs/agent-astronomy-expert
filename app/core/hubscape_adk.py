@@ -664,6 +664,23 @@ class RemoteContext:
             })
         return results
 
+    def get_supported_languages(self, capability: str = "all") -> List[Dict[str, Any]]:
+        """
+        Retrieves the canonical catalog of platform languages.
+        
+        Args:
+            capability: 'all' returns all 57 languages; 'voice' filters strictly
+                        for languages with voice_supported == True.
+        """
+        from app.core.constants.languages import get_supported_languages as _get_langs
+        return _get_langs(capability=capability)
+
+    def get_language(self, code: str) -> Optional[Dict[str, Any]]:
+        """Finds language metadata by ISO/BCP-47 code (e.g. 'en', 'es', 'ja')."""
+        from app.core.constants.languages import get_language_by_code as _get_lang
+        return _get_lang(code)
+
+
 
 def get_context() -> RemoteContext:
     try:
@@ -700,6 +717,30 @@ def get_agent_url() -> str:
     except Exception:
         from app.app_utils.env_resolver import get_agent_url as _resolve_agent_url
         return _resolve_agent_url()
+
+
+def get_supported_languages(capability: str = "all") -> List[Dict[str, Any]]:
+    """Retrieves the canonical catalog of platform languages.
+    
+    Args:
+        capability: 'all' returns all 57 languages; 'voice' filters strictly
+                    for languages with voice_supported == True.
+    """
+    try:
+        return get_context().get_supported_languages(capability=capability)
+    except Exception:
+        from app.core.constants.languages import get_supported_languages as _get_langs
+        return _get_langs(capability=capability)
+
+
+def get_language(code: str) -> Optional[Dict[str, Any]]:
+    """Finds language metadata by ISO/BCP-47 code (e.g. 'en', 'es', 'ja')."""
+    try:
+        return get_context().get_language(code)
+    except Exception:
+        from app.core.constants.languages import get_language_by_code as _get_lang
+        return _get_lang(code)
+
 
 
 @contextlib.contextmanager

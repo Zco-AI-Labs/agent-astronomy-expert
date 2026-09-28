@@ -60,7 +60,7 @@ Agents can render widgets into three distinct spatial surfaces:
 > [!IMPORTANT]
 > **Official Component Reference:** For the complete specification and details on Lego UI elements, refer directly to the [ADK Lego Widgets & IFrames Guide](file://docs/Hubscape-ADK-Manual/CHAPTER_6_LEGO_WIDGETS_AND_IFRAMES.md) and the [UI Elements Catalog](file://docs/UI_ELEMENTS.md).
 > The standard registry of supported elements is:
-> `container`, `text`, `icon`, `image`, `spacer`, `button`, `input`, `select`, `iframe`, `calendar-grid`, `table`, `list`, `progress`, `youtube`, `media-player`, `file-handler`, `human-approval-gate`, `flow-chart`, `toggle`, `choice-picker`, `slider`, `tabs`, `accordion`, `live-error-banner`.
+> `container`, `text`, `icon`, `image`, `spacer`, `button`, `input`, `select`, `color-picker`, `iframe`, `calendar-grid`, `table`, `list`, `progress`, `youtube`, `media-player`, `file-handler`, `human-approval-gate`, `flow-chart`, `toggle`, `choice-picker`, `slider`, `tabs`, `accordion`, `live-error-banner`.
 
 Below are the most common component types and their configurations:
 
@@ -112,7 +112,19 @@ Renders interactive submit/action buttons.
     * `colorTheme` (string): Accent color palette: `"blue"`, `"red"`, `"green"`, `"emerald"`, `"amber"`, `"indigo"`, `"violet"`.
     * `borderRadius` (string): `"none"`, `"sm"`, `"md"`, `"lg"`, `"xl"`, `"full"`.
 
-### 5. Live Error Banner (`live-error-banner`)
+
+### 5. Color Picker (`color-picker`)
+Interactive drop-down color selector with circular canvas wheel, brightness slider, synced HEX & RGB inputs, presets, and Select/Cancel confirmation buttons.
+* **Props:**
+  * `name` (string): **REQUIRED.** The payload key. Value is submitted in Hex (`#RRGGBB`) or RGB format.
+  * `label` (string): Label displayed above the selector.
+  * `defaultValue` / `default_value` (string): Initial color code (Hex or RGB). Defaults to `"#3B82F6"`.
+  * `format` (string): `"hex"` (default) or `"rgb"`.
+  * `presetColors` / `presets` (array of strings): Optional custom list of hex colors for quick-select swatches.
+  * `required` (boolean | string): Enforces non-empty selection validation.
+  * `disabled` (boolean): Disables interaction.
+
+### 6. Live Error Banner (`live-error-banner`)
 Renders a standardized error alert card for live monitoring process failures with diagnostic details expander and optional retry actions.
 * **Props:**
   * `title` (string): Header title (defaults to `"Operation Error Detected"`).
@@ -305,6 +317,10 @@ Canvas and remote widgets can communicate in real time without backend roundtrip
 When referencing dynamic data inside widget templates (e.g., text fields, image URLs, button action URLs):
 * **Use Flat Keys**: The React frontend (`DynamicWidget.tsx`) automatically unwraps/flattens dynamic payload namespaces (`data`, `response`, `result`, `widget_data`, etc.). Therefore, reference keys directly (e.g., use `{{image_url}}` instead of `{{data.image_url}}`).
 * **No Dot Notation**: The frontend's template interpolator matches variables using the regex `/\{\{\s*(\w+)\s*\}\}/g`. Because a dot (`.`) is not a word character (`\w`), the regex will fail to match placeholders containing dots, causing them to render literally in the DOM. Never use dots in template variable names.
+* **IFrame Data Ingestion Rules**:
+  - **Query Params**: Reserved strictly for tiny scalar bootstrap primitives (e.g. `?theme=dark`).
+  - **Forbidden Anti-Pattern**: Never attempt `?items={{data.items}}` in iframe `src`. It fails regex parsing, stringifies arrays into `[object Object]`, and exceeds URL size limits.
+  - **Rich Data**: Pass dynamic data via `context.show_widget("...", data={...})` and handle via `window.addEventListener('message', ...)` in the iframe.
 
 ---
 

@@ -9,9 +9,10 @@ Custom agents can display rich interfaces inside the companion chat UI. Simple f
 Lego widgets are JSON files representing a tree of nested components. They must be saved inside:
 `app/ui/widgets/<widget_name>.json`
 
-### Data Binding Rules:
-1. **Flat Keys:** The React UI parser flattens variables passed to widgets. Reference keys directly (e.g. use `{{image_url}}` rather than `{{data.image_url}}`).
-2. **No Dot Notation:** Variable placeholders are parsed using the regex pattern `/\{\{\s*(\w+)\s*\}\}/g`. Because dots (`.`) are not word characters, placeholders containing dots will fail to parse and render literally in the DOM.
+### Data Binding Rules & Ingestion Mechanisms:
+1. **Flat Keys:** The React UI parser (`DynamicWidget.tsx`) automatically unwraps and flattens variable namespaces passed in `context.show_widget("...", data={...})`. Always reference keys directly at the root (e.g. use `{{image_url}}` rather than `{{data.image_url}}`).
+2. **No Dot Notation:** Variable placeholders are evaluated using the regex `/\{\{\s*(\w+)\s*\}\}/g`. Because dots (`.`) are not matched by `\w`, placeholders containing dots (like `{{data.projects}}` or `{{user.name}}`) will fail to parse and render literally in the DOM.
+3. **String Coercion for Lego Elements:** When interpolating `{{variable}}` into Lego JSON props (such as labels, titles, or styling), the host executes `String(val)`. This works perfectly for primitives (`str`, `int`, `float`, `bool`), but complex objects or lists of dictionaries will be coerced into `"[object Object]"`. For rich, complex data structures, use custom IFrames with `postMessage` or array-consuming components (`table`, `list`).
 
 ---
 
@@ -153,7 +154,7 @@ When building App Mode companion remotes or interactive Lego widgets, buttons ca
 
 ## 4. Visual Sandboxed IFrames (`iframe`)
 
-For complex UIs requiring canvas interactions, dragging, or real-time editing, use the `iframe` Lego component to embed custom HTML files:
+For complex UIs requiring custom interactive HTML (canvas drawing, drag-and-drop, reactive charts, interactive dropdown menus, or external web apps), use the `iframe` Lego component to embed custom HTML files:
 
 ```json
 {
@@ -166,6 +167,21 @@ For complex UIs requiring canvas interactions, dragging, or real-time editing, u
 ```
 
 * **Relative Src Rule:** Always use relative platform paths (e.g. `/api/agents/{{agent_id}}/static/widget.html`) inside the `src` property. Never hardcode absolute URLs or ports (like `http://localhost:8090/...`) as they will fail when deployed to production cloud routing.
+
+### 4.1 Data Passing Architecture: Query Parameters vs. Data Objects & `postMessage`
+
+When integrating an iframe, understanding how data travels between Python, the React host, and the iframe is critical:
+
+| Data Channel | Best Suited For | Size Limit | Mechanism / Lifecycle | Common Pitfalls |
+| :--- | :--- | :--- | :--- | :--- |
+| **URL Query Parameters** (`props.src`) | **Tiny Bootstrap Primitives** (e.g. `?theme=dark&mode=compact&agent_id={{agent_id}}`) | ~2 KB | Synchronous on initial page load; parsed via `new URLSearchParams(window.location.search)` | ❌ Passing arrays/objects yields `[object Object]`.<br>❌ Dots in `{{data.param}}` fail regex parsing.<br>❌ Large data exceeds URL limits (HTTP 414). |
+| **The `data` Dictionary & `postMessage`** | **Rich / Large Datasets** (e.g. project lists, suggestion menus, MCP API records) | Unlimited (In-Memory) | Asynchronous via `window.parent.postMessage()` & `window.addEventListener('message')` | ❌ Mounting race condition: if parent posts before iframe initializes its listener, message is lost. |
+
+#### ⚠️ Critical Pitfall: Why You Must Never Pass Large Data via Query Params
+Attempting to pass lists of objects via `src` query strings (e.g., `src: "...html?projects={{data.projects}}"`) will fail catastrophically:
+1. **Regex Rejection:** The host regex `/\{\{\s*(\w+)\s*\}\}/g` rejects the dot in `data.projects`, leaving literal `{{data.projects}}` in the URL.
+2. **Stringification Corruption:** Even if using flat `{{projects}}`, JavaScript will coerce Python lists of dictionaries into comma-separated `"[object Object],[object Object]"`.
+3. **URL Truncation:** URLs longer than ~2,048 characters are rejected by web servers and proxies with `414 URI Too Long`.
 
 ---
 
@@ -227,22 +243,41 @@ window.parent.postMessage({
 }, '*');
 ```
 
-### 2. Outbound Events from Hubscape to the IFrame
-When the user triggers a toolbar action button or interacts with a companion remote widget in the Side Bar dock, the parent platform broadcasts a `HUBSCAPE_APP_BRIDGE` event into all active iframes:
+### 2. Outbound Events from Hubscape to the IFrame (Receiving Dynamic Data)
+When Python tools return data, when companion remotes update state, or when the user clicks toolbar actions, messages are dispatched into active iframes:
 
 ```javascript
+// Register listener for inbound data from parent Holodeck runtime
 window.addEventListener('message', (event) => {
   const data = event.data;
-  if (data && data.type === 'HUBSCAPE_APP_BRIDGE') {
-    const { type, payload } = data.detail;
-    if (type === 'TOOLBAR_ACTION') {
-      console.log("Toolbar action clicked:", payload.id);
-    } else if (type === 'STATE_UPDATE') {
-      console.log("Companion remote updated state:", payload);
-    }
-  } else if (data && data.type === 'TOOL_RESPONSE') {
-    console.log("Received backend tool response:", data.payload);
+  if (!data || typeof data !== 'object') return;
+
+  // 1. Inbound data from backend tool execution or widget data hydration
+  if (data.type === 'TOOL_RESPONSE' || data.type === 'SET_DATA' || data.type === 'SET_SUGGESTIONS') {
+    const payload = data.payload || data.data || data;
+    console.log("Received dynamic data from agent:", payload);
+    renderDynamicUI(payload);
   }
+
+  // 2. Hubscape App Bridge events (toolbar clicks, inter-widget state)
+  if (data.type === 'HUBSCAPE_APP_BRIDGE') {
+    const detail = data.detail || {};
+    if (detail.type === 'TOOLBAR_ACTION') {
+      console.log("Toolbar action clicked:", detail.payload?.id);
+    } else if (detail.type === 'STATE_UPDATE') {
+      console.log("State updated across bridge:", detail.payload);
+      updateLocalState(detail.payload);
+    }
+  }
+});
+
+// Optional Handshake: Notify parent that iframe DOM & listeners are ready
+window.addEventListener('DOMContentLoaded', () => {
+  window.parent.postMessage({
+    type: 'HUBSCAPE_APP_BRIDGE',
+    action: 'IFRAME_READY',
+    payload: { ready: true }
+  }, '*');
 });
 ```
 
@@ -255,7 +290,7 @@ The platform inspects iframe `src` URLs to enforce strict domain boundaries:
 
 ## 6. Declarative Field Validation
 
-Lego form inputs (`input`, `select`, `choice-picker`) support standardized declarative validation.
+Lego form inputs (`input`, `select`, `choice-picker`, `color-picker`) support standardized declarative validation.
 
 ### Validation Properties:
 * `required` (boolean | string): Ensures field is non-empty. Optional custom error string.

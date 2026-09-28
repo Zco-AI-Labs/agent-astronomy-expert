@@ -7,7 +7,7 @@
     {
       "type": "iframe",
       "props": {
-        "src": "/api/agents/YOUR_ASSIGNED_AGENT_UUID/static/admin.html",
+        "src": "/api/agents/{{agent_id}}/static/admin.html",
         "height": "420px"
       }
     }

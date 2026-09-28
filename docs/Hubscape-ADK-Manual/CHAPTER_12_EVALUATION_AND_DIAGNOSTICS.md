@@ -60,6 +60,4 @@ In production cloud environments, resolving connection, permission, or loading f
 * **Libraries**: Deployed versions of critical packages (e.g., `google-adk`, `google-cloud-aiplatform`).
 * **Tool Imports**: Any Python execution warnings or stack traces captured by `[load_local_tools.py](../../app/core/load_local_tools.py)` during startup.
 
----
-
-[Previous Chapter: Unified HTTP Serving Architecture](CHAPTER_11_UNIFIED_HTTP_SERVING_ARCHITECTURE.md)
+[Next Chapter: GEAP Agent Deployment Guide](CHAPTER_13_DEPLOYMENT_GUIDE.md) | [Previous Chapter: Unified HTTP Serving Architecture](CHAPTER_11_UNIFIED_HTTP_SERVING_ARCHITECTURE.md)

@@ -88,112 +88,63 @@
     </div>
 
     <script>
-        // Resolve target API endpoint base
-        const API_BASE = window.location.origin;
-
-        // Parse workspace/auth context parameters from URL (Primary mode)
+        // 1. Resolve agentId from path or query parameters
         const urlParams = new URLSearchParams(window.location.search);
-        const authToken = urlParams.get('authToken');
-        const hubId = urlParams.get('hubId');
-        const orgId = urlParams.get('orgId');
+        const pathParts = window.location.pathname.split('/');
+        const agentId = urlParams.get('agent_id') || 
+            (((pathParts[2] === 'plugins' || pathParts[2] === 'agents') && pathParts[3]) ? pathParts[3] : 'my_agent');
 
-        // Check if we are running in an active shell session
-        const hasUrlContext = !!(authToken || hubId || orgId);
-        console.log(`[Dual-Mode Fetch] URL parameters found: ${hasUrlContext}`);
+        const statusDiv = document.getElementById('status-message');
 
-        // Callback handler when receiving message responses from postMessage (Fallback mode)
-        let messageResolve = null;
-        let messageReject = null;
-
+        // 2. Listen for dynamic inbound data payloads from parent Holodeck runtime
         window.addEventListener('message', (event) => {
             const data = event.data;
             if (!data || typeof data !== 'object') return;
 
-            if (data.type === 'SUBMIT_SUCCESS' && messageResolve) {
-                messageResolve(data.payload);
-                messageResolve = null;
-                messageReject = null;
-            } else if (data.type === 'SUBMIT_ERROR' && messageReject) {
-                messageReject(new Error(data.error || "Form submission failed via postMessage"));
-                messageResolve = null;
-                messageReject = null;
+            // Handle data passed from Python tools
+            if (data.type === 'SET_DATA' || data.type === 'TOOL_RESPONSE') {
+                const payload = data.payload || data.data || data;
+                console.log("[IFrame] Received dynamic data payload:", payload);
+                if (payload.default_value) {
+                    document.getElementById('inputValue').value = payload.default_value;
+                }
             }
         });
 
-        // The unified submit function implementing the Dual-Mode fetching pattern
-        async function submitData(actionUrl, payload) {
-            const statusDiv = document.getElementById('status-message');
-            statusDiv.className = 'status';
-            statusDiv.style.display = 'none';
-
-            // Mode A: Direct REST Fetch (Self-healing, bypassed FormContext)
-            if (hasUrlContext) {
-                console.log("[Dual-Mode Fetch] Executing direct API fetch...");
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
-                if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-                if (hubId) headers['X-Hubscape-Hub-Id'] = hubId;
-                if (orgId) headers['X-Hubscape-Org-Id'] = orgId;
-
-                const response = await fetch(`${API_BASE}${actionUrl}`, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    let errMessage = "Submission failed";
-                    try {
-                        const errData = await response.json();
-                        errMessage = errData.detail || errData.message || errMessage;
-                    } catch (e) {}
-                    throw new Error(errMessage);
-                }
-
-                return await response.json();
-            } 
-            
-            // Mode B: postMessage Broker Fallback (Legacy/standard routing)
-            console.log("[Dual-Mode Fetch] Falling back to parent window postMessage...");
-            return new Promise((resolve, reject) => {
-                messageResolve = resolve;
-                messageReject = reject;
-
-                window.parent.postMessage({
-                    type: 'SUBMIT_FORM',
-                    actionUrl: actionUrl,
-                    payload: payload
-                }, '*');
-
-                // Enforce a timeout for safety
-                setTimeout(() => {
-                    if (messageReject) {
-                        messageReject(new Error("Request timed out waiting for parent host response"));
-                        messageResolve = null;
-                        messageReject = null;
-                    }
-                }, 5000);
-            });
-        }
-
-        document.getElementById('example-form').addEventListener('submit', async (e) => {
+        // 3. Dispatch form submission via standard postMessage broker
+        document.getElementById('example-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const inputVal = document.getElementById('inputValue').value;
-            const statusDiv = document.getElementById('status-message');
 
-            try {
-                // Submit to the agent's custom action endpoint
-                const result = await submitData('/api/plugins/my_agent/example-action', {
-                    input_value: inputVal
-                });
+            // Submit action to the agent backend
+            window.parent.postMessage({
+                type: 'SUBMIT_FORM',
+                actionUrl: `agent://${agentId}/example_action`,
+                payload: { input_value: inputVal }
+            }, '*');
 
-                statusDiv.innerText = result.message || "Saved successfully!";
-                statusDiv.className = 'status success';
-            } catch (err) {
-                statusDiv.innerText = `Error: ${err.message}`;
-                statusDiv.className = 'status error';
-            }
+            // Post chat announcement to companion chat timeline
+            window.parent.postMessage({
+                type: 'HUBSCAPE_APP_BRIDGE',
+                action: 'POST_CHAT',
+                payload: {
+                    text: `Updated configuration value to: "${inputVal}"`,
+                    senderName: 'Admin Control Panel'
+                }
+            }, '*');
+
+            statusDiv.innerText = "Action dispatched to agent!";
+            statusDiv.className = 'status success';
+            statusDiv.style.display = 'block';
+        });
+
+        // 4. Send ready handshake when iframe is fully loaded
+        window.addEventListener('DOMContentLoaded', () => {
+            window.parent.postMessage({
+                type: 'HUBSCAPE_APP_BRIDGE',
+                action: 'IFRAME_READY',
+                payload: { ready: true }
+            }, '*');
         });
     </script>
 </body>

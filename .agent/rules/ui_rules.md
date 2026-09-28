@@ -18,6 +18,11 @@ When referencing dynamic data (such as image URLs, text variables, or button act
   * **Correct:** `{{target}}`
   * **Incorrect:** `{{data.target}}`
 
+* **Query Parameters vs. Data Objects for IFrames**:
+  * **Query Params (`?key=val` in `props.src`)**: Use ONLY for tiny, scalar bootstrap values (e.g. `?theme=dark&mode=compact`).
+  * **Never pass collections/objects via query params**: Passing arrays or dictionaries in the URL (e.g. `?projects={{data.projects}}`) will break because `{{data.projects}}` fails regex parsing, complex objects turn into `"[object Object]"`, and large data exceeds URL length limits.
+  * **Pass rich data via `data` and `postMessage`**: Pass rich records into `context.show_widget(..., data=...)` and consume them inside the iframe via `window.addEventListener('message', ...)`. Inbound message types include `SET_DATA`, `SET_SUGGESTIONS`, and `TOOL_RESPONSE`.
+
 ## 2. Lego Widget Component & Registry Rules
 * **Strict Catalog Compliance:** All widget files must be structured as nested Lego components complying with the official element catalog schema. The root component must be `"type": "container"` with nested `"children"` nodes.
 * **No Deprecated/Custom Layouts:** Do not use custom layouts or legacy root schemas like `"layout": "list_tiles"`, `"layout": "card_grid"`, or mapping list arrays directly to top-level attributes. Use standard list structures (`list`, `table`, or nested `container` elements) to render collections of records.

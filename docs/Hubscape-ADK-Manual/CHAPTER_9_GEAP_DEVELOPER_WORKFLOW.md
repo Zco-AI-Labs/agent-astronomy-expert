@@ -77,10 +77,14 @@ You can run standalone Python scripts or `agents-cli playground` to test tool ex
 The `deploy.py` script acts as a smart wrapper that prepares your workspace and deploys your agent to Google Vertex AI via `agents-cli deploy`. 
 
 Before deploying, `deploy.py` automatically performs the following preparation steps:
+* **Core Freshness Verification:** It verifies that all files under `app/core/` match the latest canonical version from `hubscape-agent-template`. If any core files are outdated or modified, deployment is blocked and the developer is instructed to run `hubscape-adk -u`.
 * **Configuration Merging:** It checks for the existence of `deploy_config.json`. If missing, it generates it with current defaults; if present, it deep-merges developer-defined parameters under the `agents-cli-manifest` -> `create_params` key into `agents-cli-manifest.yaml` to ensure they are preserved during deployment.
 * **Name Synchronization:** It parses the agent's name from `[app/agent.py](../../app/agent.py)` and synchronizes it across `agents-cli-manifest.yaml`, `pyproject.toml`, `uv.lock`, `app/SKILL.md`, and Terraform deployment variables.
 * **Dependency Locking:** It executes `uv lock` to ensure `uv.lock` is fully updated.
 * **IAM Service Account Verification:** It dynamically queries the Firestore `agents` collection to see if the agent name is registered. It extracts the associated `iam_profile` service account configuration (defaulting to `"sa-standard-agent"`), constructs the appropriate Gserviceaccount email, and passes it via `--service-account` to `agents-cli deploy` to secure execution identity.
+
+> [!TIP]
+> For the complete reference on GitHub Actions CI/CD pipelines, pre-deployment checks, and local deployments, see [Chapter 13: GEAP Agent Deployment Guide](CHAPTER_13_DEPLOYMENT_GUIDE.md).
 
 1. Run the deployment script:
    ```bash

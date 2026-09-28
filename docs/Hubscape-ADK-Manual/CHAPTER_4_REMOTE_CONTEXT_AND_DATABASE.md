@@ -65,7 +65,33 @@ To discover other subagents registered and whitelisted for the active user sessi
 
 ---
 
-## 5. Index-Free Query Rules
+## 5. Platform Language Discovery (`get_supported_languages`, `get_language`)
+
+`RemoteContext` provides built-in methods to introspect the platform's canonical 57-language catalog and determine real-time voice streaming capability:
+
+### Language Methods on `RemoteContext`:
+* `context.get_supported_languages(capability: str = "all") -> list`: Retrieves the canonical catalog of platform languages.
+  * `capability="all"` (default): Returns all 57 supported languages.
+  * `capability="voice"`: Returns strictly the 31 languages certified for Gemini Multimodal Live bidirectional speech (`voice_supported: True`).
+* `context.get_language(code: str) -> Optional[dict]`: Looks up language metadata by ISO/BCP-47 code (e.g., `'en'`, `'es'`, `'ja'`, `'is'`). Returns `None` if the code is not recognized.
+
+### Example:
+```python
+context = get_context()
+
+# Retrieve all voice-ready languages
+voice_langs = context.get_supported_languages(capability="voice")
+
+# Check if a requested language supports voice mode
+lang_info = context.get_language("is")
+if lang_info and not lang_info.get("voice_supported"):
+    # Inform user that Icelandic is supported in text mode, but voice streaming is uncertified
+    pass
+```
+
+---
+
+## 6. Index-Free Query Rules
 
 The platform does not support custom composite indexes in production databases. 
 * **Rule:** Do not write queries containing multiple inequality filters, order-by clauses on unindexed fields, or filtering across multiple ranges.
@@ -73,7 +99,7 @@ The platform does not support custom composite indexes in production databases.
 
 ---
 
-## 6. Agent Observability, Telemetry & Billing Logs
+## 7. Agent Observability, Telemetry & Billing Logs
 
 Because custom agent action events (like RAG database queries, external API lookups, web scraping, or custom payments) are **not** standard GenAI model inference calls, they are **not** automatically telemetry-logged by Google's Vertex AI model pipeline. 
 
@@ -147,7 +173,7 @@ def my_custom_paid_tool(param: str) -> dict:
 
 ---
 
-## 7. UI & Viewport Directives (`show_widget`, `launch_app_mode`, `close_widget`)
+## 8. UI & Viewport Directives (`show_widget`, `launch_app_mode`, `close_widget`)
 
 `RemoteContext` provides built-in methods for queuing client-side UI action directives that render across the platform's tri-target viewport system (`inline`, `sidebar`, `app_mode`):
 

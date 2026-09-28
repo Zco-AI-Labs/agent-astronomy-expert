@@ -198,74 +198,145 @@ def sync_config_to_manifest():
     except Exception as e:
         print(f"Error: Failed to update agents-cli-manifest.yaml. Error: {e}")
 
+# Helper to verify that project core and utility files match the canonical template
+def verify_core_files_up_to_date():
+    """
+    Verifies that all platform infrastructure files under app/core/ and app/app_utils/
+    match the latest canonical version from hubscape-agent-template. If any files are
+    outdated, modified, or missing, the deployment is immediately blocked.
+    """
+    if os.getenv("HUBSCAPE_SKIP_CORE_CHECK") == "1":
+        print("⚠️ Warning: HUBSCAPE_SKIP_CORE_CHECK is enabled. Bypassing platform files integrity check.")
+        return
 
-# Sync developer-defined config from deploy_config.json to manifest first
-sync_config_to_manifest()
+    print("🔍 Verifying platform infrastructure files against canonical hubscape-agent-template...")
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    protected_dirs = ["app/core", "app/app_utils"]
 
-# Resolve the name and run synchronization before deploying
-display_name = get_new_agent_name()
-sync_agent_name(display_name)
+    import hashlib
+    import tempfile
 
-# Run 'uv lock' to properly regenerate and synchronize uv.lock
-uv_path = shutil.which("uv")
-if uv_path:
-    print("Running 'uv lock' to synchronize and validate uv.lock...")
-    try:
-        subprocess.run([uv_path, "lock"], check=True)
-        print("  uv.lock successfully updated and synchronized.")
-    except Exception as e:
-        print(f"Warning: 'uv lock' failed: {e}")
-else:
-    print("Warning: 'uv' command not found. Please ensure uv is installed and run 'uv lock' to validate dependency locks.")
+    def get_file_hash(filepath):
+        h = hashlib.sha256()
+        with open(filepath, "rb") as f:
+            while chunk := f.read(8192):
+                h.update(chunk)
+        return h.hexdigest()
 
-print(f"Deploying {display_name} via native agents-cli...")
+    # Determine clone URLs with authentication fallback
+    gh_token = os.getenv("GH_TOKEN") or os.getenv("ORG_GITHUB_TOKEN")
+    clone_candidates = []
+    if gh_token:
+        clone_candidates.append(f"https://x-access-token:{gh_token}@github.com/Zco-AI-Labs/hubscape-agent-template.git")
+    clone_candidates.append("https://github.com/Zco-AI-Labs/hubscape-agent-template.git")
+    clone_candidates.append("git@github.com:Zco-AI-Labs/hubscape-agent-template.git")
 
-agents_cli_path = shutil.which("agents-cli")
-if not agents_cli_path:
-    venv_bin = os.path.dirname(sys.executable)
-    fallback_path = os.path.join(venv_bin, "agents-cli")
-    if os.path.exists(fallback_path):
-        agents_cli_path = fallback_path
-if not agents_cli_path:
-    agents_cli_path = "agents-cli"
+    with tempfile.TemporaryDirectory() as temp_dir:
+        clone_success = False
+        clone_errors = []
 
-iam_profile = "sa-standard-agent"
-try:
-    try:
-        from google.cloud import firestore
-    except ImportError:
-        print("ℹ️ google-cloud-firestore not found. Installing dynamically...")
-        import subprocess
-        subprocess.run([sys.executable, "-m", "pip", "install", "google-cloud-firestore"], check=True)
-        from google.cloud import firestore
+        for url in clone_candidates:
+            display_url = re.sub(r'https://[^@]+@', 'https://***@', url)
+            try:
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", url, temp_dir],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=True
+                )
+                clone_success = True
+                break
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                err_msg = e.stderr.strip() if hasattr(e, "stderr") and e.stderr else str(e)
+                # Clean up any partial clone in temp_dir before trying next candidate
+                for item in os.listdir(temp_dir):
+                    item_path = os.path.join(temp_dir, item)
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                    else:
+                        os.remove(item_path)
+                clone_errors.append(f"[{display_url}]: {err_msg}")
 
-    db = firestore.Client(project=PROJECT_ID)
-    docs = db.collection("agents").where("name", "==", display_name).limit(1).stream()
-    doc = next(docs, None)
-    if doc:
-        iam_profile = doc.to_dict().get("iam_profile") or "sa-standard-agent"
-        print(f"ℹ️ Found agent configuration in Firestore. Binding profile: {iam_profile}")
-    else:
-        print(f"ℹ️ Agent not found in Firestore. Defaulting to profile: {iam_profile}")
-except Exception as e:
-    print(f"⚠️ Could not fetch agent profile from Firestore ({e}). Defaulting to profile: {iam_profile}")
+        if not clone_success:
+            print("\n❌ Deployment blocked: Unable to fetch canonical template to verify platform files.")
+            print("Troubleshooting details:")
+            for err in clone_errors:
+                print(f"  {err}")
+            print("\n💡 Required Actions:")
+            print("  1. Verify you have read access to 'https://github.com/Zco-AI-Labs/hubscape-agent-template'.")
+            print("  2. In CI/CD, ensure 'ORG_GITHUB_TOKEN' is configured as an Organization Secret.")
+            print("  3. For emergency offline/break-glass deployments, set HUBSCAPE_SKIP_CORE_CHECK=1.")
+            sys.exit(1)
 
-cmd = [
-    agents_cli_path, "deploy",
-    "--project", PROJECT_ID,
-    "--region", LOCATION,
-    "--service-name", display_name,
-    "--service-account", f"{iam_profile}@{PROJECT_ID}.iam.gserviceaccount.com",
-    "--no-confirm-project"
-]
+        mismatched_files = []
+        missing_files = []
+        extra_files = []
 
-env = os.environ.copy()
-venv_bin = os.path.dirname(sys.executable)
-env["PATH"] = f"{venv_bin}{os.path.pathsep}{env.get('PATH', '')}"
+        for rel_dir in protected_dirs:
+            local_dir = os.path.join(project_dir, rel_dir)
+            template_dir = os.path.join(temp_dir, rel_dir)
 
-print(f"Executing: {' '.join(cmd)}")
-subprocess.run(cmd, env=env, check=True)
-print("🎉 Deployment completed successfully!")
+            if not os.path.exists(local_dir):
+                missing_files.append(f"{rel_dir}/ (entire directory missing)")
+                continue
+
+            if not os.path.exists(template_dir):
+                continue
+
+            # Recursively scan all files in the template's protected dir
+            for root, _, files in os.walk(template_dir):
+                for file in files:
+                    if file.endswith((".pyc", ".pyo")) or file == "__pycache__":
+                        continue
+                    template_file_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(template_file_path, template_dir)
+                    local_file_path = os.path.join(local_dir, rel_path)
+                    display_rel_path = os.path.join(rel_dir, rel_path)
+
+                    if not os.path.exists(local_file_path):
+                        missing_files.append(display_rel_path)
+                    else:
+                        template_hash = get_file_hash(template_file_path)
+                        local_hash = get_file_hash(local_file_path)
+                        if template_hash != local_hash:
+                            mismatched_files.append(display_rel_path)
+
+            # Check for any rogue/extra files added inside local protected dir
+            for root, _, files in os.walk(local_dir):
+                for file in files:
+                    if file.endswith((".pyc", ".pyo")) or file == "__pycache__":
+                        continue
+                    local_file_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(local_file_path, local_dir)
+                    template_file_path = os.path.join(template_dir, rel_path)
+                    display_rel_path = os.path.join(rel_dir, rel_path)
+                    if not os.path.exists(template_file_path):
+                        extra_files.append(display_rel_path)
+
+        if mismatched_files or missing_files or extra_files:
+            print("\n" + "=" * 80)
+            print("❌ DEPLOYMENT BLOCKED: Project platform files are out of date or have been modified!")
+            print("=" * 80)
+            print("The following files under 'app/core/' and 'app/app_utils/' differ from canonical template:")
+            if mismatched_files:
+                print("\nModified / Outdated files:")
+                for f in mismatched_files:
+                    print(f"  • {f}")
+            if missing_files:
+                print("\nMissing platform files:")
+                for f in missing_files:
+                    print(f"  • {f}")
+            if extra_files:
+                print("\nUnauthorized additional files in platform directories:")
+                for f in extra_files:
+                    print(f"  • {f}")
+            print("\n👉 Please run 'hubscape-adk -u' to upgrade your project files before deploying.")
+            print("=" * 80 + "\n")
+            sys.exit(1)
+
+        print("✅ Platform files integrity verified: All files in app/core/ and app/app_utils/ match hubscape-agent-template.")
+
 
 # Helper to resolve HMAC secret for platform registry sync
 def get_sync_secret(project_id: str) -> str:
@@ -288,6 +359,7 @@ def get_sync_secret(project_id: str) -> str:
         
     # 3. Standard fallback for local dev environments
     return "hubscape-development-master-key-fallback"
+
 
 def trigger_platform_sync(project_id: str):
     backend_url = os.getenv("HUBSCAPE_BACKEND_URL", "https://hubscape-backend-w3xi4ozhca-uc.a.run.app")
@@ -329,4 +401,81 @@ def trigger_platform_sync(project_id: str):
     if not success:
         print("⚠️ Warning: Platform backend sync could not be completed automatically. Verify network access or trigger manual sync in Admin Portal.")
 
-trigger_platform_sync(PROJECT_ID)
+
+def main():
+    # 1. Verify core files are up to date before any action is taken
+    verify_core_files_up_to_date()
+
+    # 2. Sync developer-defined config from deploy_config.json to manifest
+    sync_config_to_manifest()
+
+    # 3. Resolve the name and run synchronization before deploying
+    display_name = get_new_agent_name()
+    sync_agent_name(display_name)
+
+    # Run 'uv lock' to properly regenerate and synchronize uv.lock
+    uv_path = shutil.which("uv")
+    if uv_path:
+        print("Running 'uv lock' to synchronize and validate uv.lock...")
+        try:
+            subprocess.run([uv_path, "lock"], check=True)
+            print("  uv.lock successfully updated and synchronized.")
+        except Exception as e:
+            print(f"Warning: 'uv lock' failed: {e}")
+    else:
+        print("Warning: 'uv' command not found. Please ensure uv is installed and run 'uv lock' to validate dependency locks.")
+
+    print(f"Deploying {display_name} via native agents-cli...")
+
+    agents_cli_path = shutil.which("agents-cli")
+    if not agents_cli_path:
+        venv_bin = os.path.dirname(sys.executable)
+        fallback_path = os.path.join(venv_bin, "agents-cli")
+        if os.path.exists(fallback_path):
+            agents_cli_path = fallback_path
+    if not agents_cli_path:
+        agents_cli_path = "agents-cli"
+
+    iam_profile = "sa-standard-agent"
+    try:
+        try:
+            from google.cloud import firestore
+        except ImportError:
+            print("ℹ️ google-cloud-firestore not found. Installing dynamically...")
+            import subprocess
+            subprocess.run([sys.executable, "-m", "pip", "install", "google-cloud-firestore"], check=True)
+            from google.cloud import firestore
+
+        db = firestore.Client(project=PROJECT_ID)
+        docs = db.collection("agents").where("name", "==", display_name).limit(1).stream()
+        doc = next(docs, None)
+        if doc:
+            iam_profile = doc.to_dict().get("iam_profile") or "sa-standard-agent"
+            print(f"ℹ️ Found agent configuration in Firestore. Binding profile: {iam_profile}")
+        else:
+            print(f"ℹ️ Agent not found in Firestore. Defaulting to profile: {iam_profile}")
+    except Exception as e:
+        print(f"⚠️ Could not fetch agent profile from Firestore ({e}). Defaulting to profile: {iam_profile}")
+
+    cmd = [
+        agents_cli_path, "deploy",
+        "--project", PROJECT_ID,
+        "--region", LOCATION,
+        "--service-name", display_name,
+        "--service-account", f"{iam_profile}@{PROJECT_ID}.iam.gserviceaccount.com",
+        "--no-confirm-project"
+    ]
+
+    env = os.environ.copy()
+    venv_bin = os.path.dirname(sys.executable)
+    env["PATH"] = f"{venv_bin}{os.path.pathsep}{env.get('PATH', '')}"
+
+    print(f"Executing: {' '.join(cmd)}")
+    subprocess.run(cmd, env=env, check=True)
+    print("🎉 Deployment completed successfully!")
+
+    trigger_platform_sync(PROJECT_ID)
+
+
+if __name__ == "__main__":
+    main()

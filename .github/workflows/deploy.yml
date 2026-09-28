@@ -38,6 +38,7 @@ jobs:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'hubscape-geap' }}
           GCP_LOCATION: ${{ vars.GCP_LOCATION || 'us-central1' }}
           GCP_STAGING_BUCKET: ${{ secrets.GCP_STAGING_BUCKET || 'hubscape-geap-reasoning-engines' }}
+          GH_TOKEN: ${{ secrets.ORG_GITHUB_TOKEN || secrets.GH_TOKEN || github.token }}
         run: |
           REPO_DIR="$(basename "$(pwd)")"
           NORM_DIR="$(echo "$REPO_DIR" | tr '-' '_')"
