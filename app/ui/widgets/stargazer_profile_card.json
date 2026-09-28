@@ -13,7 +13,7 @@
         {
           "type": "text",
           "props": {
-            "text": "\ud83d\udd2d Stargazer Profile",
+            "text": "🔭 Stargazer Profile",
             "className": "text-base font-bold text-emerald-300"
           }
         },
@@ -43,21 +43,21 @@
         {
           "type": "text",
           "props": {
-            "text": "\ud83d\udccd Location: {{data.city_name}} ({{data.latitude}}\u00b0, {{data.longitude}}\u00b0)",
+            "text": "📍 Location: {{data.city_name}} ({{data.latitude}}°, {{data.longitude}}°)",
             "className": "font-medium"
           }
         },
         {
           "type": "text",
           "props": {
-            "text": "\ud83d\udd0d Observing Gear: {{data.optics_tier_label}}",
+            "text": "🔍 Observing Gear: {{data.optics_tier_label}}",
             "className": "font-medium"
           }
         },
         {
           "type": "text",
           "props": {
-            "text": "\ud83c\udf0c Dark-Sky Rating: {{data.dark_sky_desc}}",
+            "text": "🌌 Dark-Sky Rating: {{data.dark_sky_desc}}",
             "className": "text-slate-400"
           }
         }

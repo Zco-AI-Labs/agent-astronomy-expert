@@ -162,7 +162,7 @@ if allow_web_search or allow_google_maps:
 from app.app_utils.vertex_gemini import get_model
 
 root_agent = AdkAgent(
-    model=get_model("gemini-3.5-flash"),
+    model=get_model("gemini-3-flash-preview"),
     name=agent_name,
     description=agent_description,
     instruction=system_instruction,

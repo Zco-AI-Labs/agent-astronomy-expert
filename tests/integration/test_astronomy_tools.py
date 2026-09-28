@@ -4,6 +4,7 @@ from app.scripts.get_astronomical_events import get_astronomical_events
 from app.scripts.get_celestial_body_position import get_celestial_body_position
 from app.scripts.get_stargazing_forecast import get_stargazing_forecast
 from app.scripts.manage_stargazer_profile import manage_stargazer_profile
+from app.scripts.get_planet_overview import get_planet_overview
 
 
 @pytest.mark.asyncio
@@ -118,3 +119,25 @@ async def test_get_stargazing_forecast_override_remote_context():
         assert "Paris" in forecast["location_name"]
 
 
+
+
+@pytest.mark.asyncio
+async def test_get_planet_overview_tool():
+    # 1. Test Mars (explicit)
+    mars = await get_planet_overview("Mars")
+    assert mars["status"] == "success"
+    assert mars["planet_name"] == "Mars"
+    assert mars["offline_ready"] is True
+    assert mars["scale_percentage"] == 53
+    assert "Olympus Mons" in mars["key_feature"]
+
+    # 2. Test Default (None)
+    default_planet = await get_planet_overview(None)
+    assert default_planet["status"] == "success"
+    assert default_planet["planet_name"] == "Mars"
+
+    # 3. Test Natural Language Query ("tell me about the planet jupiter")
+    jupiter = await get_planet_overview("tell me about the planet jupiter")
+    assert jupiter["status"] == "success"
+    assert jupiter["planet_name"] == "Jupiter"
+    assert "Great Red Spot" in jupiter["key_feature"]

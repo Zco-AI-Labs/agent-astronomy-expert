@@ -19,7 +19,7 @@
             {
               "type": "text",
               "props": {
-                "text": "\u2728 Tonight's Night Sky Forecast",
+                "text": "✨ Tonight's Night Sky Forecast",
                 "className": "text-base font-bold text-indigo-300"
               }
             }
@@ -86,7 +86,7 @@
             {
               "type": "text",
               "props": {
-                "text": "\u2601\ufe0f {{data.cloud_cover}}%",
+                "text": "☁️ {{data.cloud_cover}}%",
                 "className": "text-xs font-semibold px-2 py-1 bg-slate-800 rounded-full text-slate-300"
               }
             }
@@ -109,7 +109,7 @@
             {
               "type": "text",
               "props": {
-                "text": "\ud83c\udf19 Moon Phase",
+                "text": "🌙 Moon Phase",
                 "className": "text-xs text-slate-400"
               }
             },
@@ -138,7 +138,7 @@
             {
               "type": "text",
               "props": {
-                "text": "\ud83d\udd2d Prime Window",
+                "text": "🔭 Prime Window",
                 "className": "text-xs text-slate-400"
               }
             },

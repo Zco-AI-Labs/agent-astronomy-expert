@@ -13,7 +13,7 @@
         {
           "type": "text",
           "props": {
-            "text": "\ud83e\ude90 {{data.target_name}}",
+            "text": "🪐 {{data.target_name}}",
             "className": "text-base font-bold text-violet-300"
           }
         },
@@ -56,7 +56,7 @@
             {
               "type": "text",
               "props": {
-                "text": "{{data.cardinal_direction}} ({{data.azimuth_degrees}}\u00b0)",
+                "text": "{{data.cardinal_direction}} ({{data.azimuth_degrees}}°)",
                 "className": "text-sm font-semibold text-slate-100"
               }
             }
@@ -78,7 +78,7 @@
             {
               "type": "text",
               "props": {
-                "text": "{{data.altitude_degrees}}\u00b0 Above Horizon",
+                "text": "{{data.altitude_degrees}}° Above Horizon",
                 "className": "text-sm font-semibold text-slate-100"
               }
             }
