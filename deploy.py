@@ -302,7 +302,6 @@ def main():
             from google.cloud import firestore
         except ImportError:
             print("ℹ️ google-cloud-firestore not found. Installing dynamically...")
-            import subprocess
             subprocess.run([sys.executable, "-m", "pip", "install", "google-cloud-firestore"], check=True)
             from google.cloud import firestore
 
