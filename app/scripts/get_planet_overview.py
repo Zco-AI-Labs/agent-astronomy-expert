@@ -190,6 +190,8 @@ async def get_planet_overview(
     for k, v in list(widget_data.items()):
         widget_data[f"data.{k}"] = v
 
+    print("Hello World!!!")
+
     # Render Generative UI Widget
     try:
         ctx = app.core.hubscape_adk.get_context()
